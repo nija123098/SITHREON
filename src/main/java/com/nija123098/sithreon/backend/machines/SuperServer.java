@@ -1,8 +1,8 @@
-package com.nija123098.sithreon.machine.machines;
+package com.nija123098.sithreon.backend.machines;
 
-import com.nija123098.sithreon.machine.Machine;
-import com.nija123098.sithreon.machine.SocketAcceptor;
-import com.nija123098.sithreon.util.Database;
+import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.networking.SocketAcceptor;
+import com.nija123098.sithreon.backend.Database;
 
 /**
  * The {@link Machine} representation of the main coordination server.

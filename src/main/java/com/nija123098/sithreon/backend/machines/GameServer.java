@@ -1,10 +1,10 @@
-package com.nija123098.sithreon.machine.machines;
+package com.nija123098.sithreon.backend.machines;
 
-import com.nija123098.sithreon.Config;
-import com.nija123098.sithreon.machine.Machine;
-import com.nija123098.sithreon.machine.SocketAcceptor;
-import com.nija123098.sithreon.machine.TransferSocket;
-import com.nija123098.sithreon.util.Log;
+import com.nija123098.sithreon.backend.Config;
+import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.networking.SocketAcceptor;
+import com.nija123098.sithreon.backend.networking.TransferSocket;
+import com.nija123098.sithreon.backend.util.Log;
 
 import java.io.IOException;
 

@@ -1,4 +1,7 @@
-package com.nija123098.sithreon.util;
+package com.nija123098.sithreon.backend;
+
+import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,6 +15,8 @@ import java.util.stream.Stream;
 
 /**
  * A simple key-value database.
+ *
+ * @author nija123098
  */
 public enum Database {
     /**
@@ -39,6 +44,9 @@ public enum Database {
         this.def = def;
     }
 
+    /**
+     * Initializes the database by loading and setting up automatic saving.
+     */
     public static void init() {
         Path dataFile = Paths.get("data");// The root data path
 
@@ -83,12 +91,9 @@ public enum Database {
             }
         };
 
-        new ScheduledThreadPoolExecutor(1, (r) -> {// Makes regular backups of the db
-            Thread thread = new Thread(r, "DatabaseScheduled");
-            thread.setDaemon(true);
-            return thread;
-        }).scheduleWithFixedDelay(save, 2, 2, TimeUnit.HOURS);
-        Runtime.getRuntime().addShutdownHook(new Thread(save, "DatabaseShutdownHook"));
+        // Makes regular backups of the db
+        new ScheduledThreadPoolExecutor(1, (r) -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Scheduled Saver", true, r)).scheduleWithFixedDelay(save, 2, 2, TimeUnit.HOURS);
+        Runtime.getRuntime().addShutdownHook(ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Save Hook", false, save));// Saves the database on shutdown
     }
 
     public void put(Object key, String value) {

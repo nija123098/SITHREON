@@ -1,9 +1,10 @@
-package com.nija123098.sithreon;
+package com.nija123098.sithreon.backend;
 
-import com.nija123098.sithreon.util.Log;
+import com.nija123098.sithreon.backend.util.Log;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,46 +16,62 @@ import java.util.stream.Stream;
 
 /**
  * A simple static config for referencing constants.
+ *
+ * @author nija123098
  */
 public class Config {
     /**
      * The {@link Path} where the config exists.
      */
     private static final Path CONFIG_PATH = Paths.get("config.cfg");
+
     /**
      * The algorithm for end to end encryption.
      */
     public static String encryptionAlgorithm;
+
     /**
      * The key for end to end encryption.
      */
     public static String encryptionKey;
+
     /**
      * The key for verification of a client.
      */
     public static String authenticationKey;
+
     /**
      * The hashing algorithm to use.
      */
     public static String hashingAlgorithm;
+
     /**
      * The address of the super server.
      */
     public static String superServerAddress;
+
     /**
      * The address of the game server.
      */
     public static String gameServerAddress;
+
+    /**
+     * The unique id of the machine.
+     */
+    public static String machineId;
+
     /**
      * The port to communicate on.
      */
     public static Integer port;
+
     /**
      * The level to display logs at.
      */
     public static Log logLevel = Log.TRACE;
+
     /**
-     * If the config should be deleted
+     * If the config should be deleted on startup.
      */
     private static Boolean removeConfig = false;
 
@@ -67,7 +84,7 @@ public class Config {
             return;
         }
         try {
-            Files.write(CONFIG_PATH, Stream.of(Config.class.getDeclaredFields()).map(field -> {
+            Files.write(CONFIG_PATH, Stream.of(Config.class.getDeclaredFields()).filter(field -> !Modifier.isFinal(field.getModifiers())).map(field -> {
                 Object val = null;
                 try {
                     val = field.get(Config.class);

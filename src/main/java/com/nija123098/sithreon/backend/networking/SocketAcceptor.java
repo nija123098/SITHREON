@@ -1,7 +1,9 @@
-package com.nija123098.sithreon.machine;
+package com.nija123098.sithreon.backend.networking;
 
-import com.nija123098.sithreon.Config;
-import com.nija123098.sithreon.util.Log;
+import com.nija123098.sithreon.backend.Config;
+import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -13,6 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * The wrapper for a {@link ServerSocket} which accepts all incoming sockets
  * and wraps those in {@link TransferSocket}s which handle authentication.
+ *
+ * @author nija123098
  */
 public class SocketAcceptor {
     private final ServerSocket serverSocket;
@@ -32,7 +36,7 @@ public class SocketAcceptor {
             Log.ERROR.log("Unable to make server socket", e);
         }
         this.serverSocket = serverSocket;
-        Thread acceptorThread = new Thread(() -> {
+        ThreadMaker.getThread(ThreadMaker.NETWORK, "Socket Acceptor Thread", true, () -> {
             while (!this.closed.get()) {
                 try {
                     Socket socket = this.serverSocket.accept();
@@ -42,11 +46,9 @@ public class SocketAcceptor {
                     Log.WARN.log("IOException accepting socket", e);
                 }
             }
-        }, "SocketAcceptorThread");
-        acceptorThread.setDaemon(true);
-        acceptorThread.start();
+        }).start();
         machine.runOnClose(this::close);
-        Log.INFO.log("Started socket acceptor");
+        Log.DEBUG.log("Started socket acceptor");
     }
 
     /**
@@ -54,5 +56,6 @@ public class SocketAcceptor {
      */
     private void close() {
         this.closed.set(true);
+        this.sockets.forEach(TransferSocket::close);
     }
 }
