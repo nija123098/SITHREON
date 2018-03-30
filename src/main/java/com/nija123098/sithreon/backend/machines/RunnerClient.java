@@ -2,6 +2,8 @@ package com.nija123098.sithreon.backend.machines;
 
 import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.networking.MachineAction;
+import com.nija123098.sithreon.backend.networking.ManagedMachineType;
 import com.nija123098.sithreon.backend.networking.TransferSocket;
 import com.nija123098.sithreon.backend.util.Log;
 
@@ -24,5 +26,6 @@ public class RunnerClient extends Machine {
             Log.ERROR.log("Unable to establish connection to game server due to IOException", e);
             throw new RuntimeException();// Won't occur
         }
+        this.superServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER));
     }
 }

@@ -35,11 +35,6 @@
             <version>3.7</version>
         </dependency>
         <dependency>
-            <groupId>org.eclipse.mylyn.github</groupId>
-            <artifactId>org.eclipse.egit.github.core</artifactId>
-            <version>2.1.5</version>
-        </dependency>
-        <dependency>
             <groupId>io.github.lukehutch</groupId>
             <artifactId>fast-classpath-scanner</artifactId>
             <version>2.9.4</version>

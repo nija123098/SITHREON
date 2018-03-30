@@ -23,10 +23,14 @@ import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 /**
  * A wrapper for a {@link Socket} which manages sending
@@ -34,7 +38,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * @author nija123098
  */
-public class TransferSocket {
+public class TransferSocket implements Comparable<TransferSocket> {
     private static final Random RANDOM = new Random();
     private static final Cipher ENCRYPTION_CIPHER;
     private static final Cipher DECRYPTION_CIPHER;
@@ -73,7 +77,11 @@ public class TransferSocket {
     private final OutputStream outputStream;
     private final Machine localMachine;
     private final AtomicBoolean authenticated = new AtomicBoolean();
+    private final AtomicBoolean otherAuthenticated = new AtomicBoolean();
     private final AtomicInteger nonce = new AtomicInteger(RANDOM.nextInt());
+    private final AtomicReference<String> machineName = new AtomicReference<>("NoConnection");
+    private final AtomicInteger machinePriority = new AtomicInteger();
+    private final List<Consumer<TransferSocket>> postAuth = new ArrayList<>();
 
     /**
      * Constructs a client socket instance for connecting to a server.
@@ -99,9 +107,9 @@ public class TransferSocket {
         this.outputStream = this.socket.getOutputStream();
         this.outputStream.flush();
         this.inputStream = this.socket.getInputStream();
-        ThreadMaker.getThread(ThreadMaker.NETWORK, "TransferSocketReadThread" + this.socket.getRemoteSocketAddress(), true, () -> {
+        ThreadMaker.getThread(ThreadMaker.NETWORK, "TransferSocketReadThread" + this.getConnectionName(), true, () -> {
             RANDOM.nextBytes(this.hashRequest);
-            this.write(MachineAction.REQUEST_AUTHENTICATION, this.hashRequest, Config.machineId.getBytes(Charset.forName("UTF-8")), this.authenticationTime);
+            this.write(MachineAction.REQUEST_AUTHENTICATION, this.hashRequest, Config.machineId, Config.priority, this.authenticationTime);
             boolean decryptMore = false;
             byte[] buffer = new byte[1024];
             byte[] decrypted;
@@ -114,7 +122,7 @@ public class TransferSocket {
                         readSize = this.inputStream.read(buffer);
                         if (this.closed.get()) return;
                         if (readSize == -1) {
-                            Log.INFO.log("Opposite side closed " + this.socket.getRemoteSocketAddress());
+                            Log.INFO.log("Opposite side closed " + this.getConnectionName());
                             this.close();
                         }
                         for (int i = 0; i < readSize; i++) unEncryptedBytes.add(buffer[i]);
@@ -132,25 +140,28 @@ public class TransferSocket {
                             } catch (IllegalBlockSizeException | BadPaddingException e) {
                                 if (this.authenticated.get()) Log.ERROR.log("Invalid security settings", e);
                                 else {
-                                    Log.WARN.log("Connection from " + this.socket.getRemoteSocketAddress() + " failed authentication");
+                                    Log.WARN.log("Connection from " + this.getConnectionName() + " failed authentication");
                                     this.close();
                                 }
                             }
                             MachineAction machineAction = MachineAction.values()[pendingBytes.get(0)];
-                            machineActionArgs = machineAction.read(pendingBytes);
+                            machineActionArgs = machineAction.read(this, pendingBytes);
                             if (machineActionArgs == null) continue;
                             if ((machineAction != MachineAction.REQUEST_AUTHENTICATION && machineAction != MachineAction.AUTHENTICATE) && !this.authenticated.get())
-                                Log.WARN.log("Connection from " + this.socket.getRemoteSocketAddress() + " attempted using non-authentication MachineCation before being authenticated");
-                            else machineAction.act(this, machineActionArgs);
+                                Log.WARN.log("Connection from " + this.getConnectionName() + " attempted using non-authentication MachineCation before being authenticated");
+                            else {
+                                Log.TRACE.log("Received MachineAction of type " + machineAction);
+                                machineAction.act(this, machineActionArgs);
+                            }
                         }
                     }
                 } catch (EOFException e) {
-                    Log.INFO.log("Opposite side closed " + this.socket.getRemoteSocketAddress());
+                    Log.INFO.log("Opposite side closed " + this.getConnectionName());
                     this.close();
                 } catch (SocketException e) {
                     switch (e.getMessage()) {
                         case "Connection reset":
-                            Log.INFO.log("Opposite side closed " + this.socket.getRemoteSocketAddress());
+                            Log.INFO.log("Opposite side closed " + this.getConnectionName());
                             this.close();
                             break;
                         case "Socket closed":
@@ -217,6 +228,19 @@ public class TransferSocket {
     }
 
     /**
+     * Returns an appropriate name based on address
+     * and the machine the connection identifies itself as.
+     *
+     * This is intended as a human readable representation of the machine
+     * connected, so it's exact contents are unspecified.
+     *
+     * @return a human readable representation for identifying the connected machine.
+     */
+    public String getConnectionName(){
+        return this.socket.getRemoteSocketAddress().toString();
+    }
+
+    /**
      * Closes the wrapped socket.
      */
     public void close() {
@@ -228,9 +252,9 @@ public class TransferSocket {
             this.outputStream.close();
             this.socket.close();
         } catch (IOException e) {
-            Log.ERROR.log("IOException closing socket to " + this.socket.getRemoteSocketAddress(), e);
+            Log.ERROR.log("IOException closing socket to " + this.getConnectionName(), e);
         }
-        Log.INFO.log("Closed socket to " + this.socket.getRemoteSocketAddress());
+        Log.INFO.log("Closed socket to " + this.getConnectionName());
         if (!(this.getLocalMachine() instanceof SuperServer)) {
             Log.INFO.log("Closing machine due to closing connection to the server");
             this.getLocalMachine().close();
@@ -239,13 +263,25 @@ public class TransferSocket {
 
     /**
      * @param hashRequest        the random byte sequence to hash with.
-     * @param machineId          the machine id to hash with.
+     * @param machineId          the other machine id to hash with.
+     * @param priority           the other machine priority to hash with.
      * @param authenticationTime the time the authentication was sent to hash with.
      * @see MachineAction#REQUEST_AUTHENTICATION
      */
     @Action(MachineAction.REQUEST_AUTHENTICATION)
-    public void requestAuthentication(byte[] hashRequest, byte[] machineId, Long authenticationTime) {
-        this.write(MachineAction.AUTHENTICATE, this.getHash(hashRequest, machineId, authenticationTime), true);
+    public void requestAuthentication(byte[] hashRequest, String machineId, Integer priority, Long authenticationTime) {
+        if (Arrays.equals(this.hashRequest, hashRequest) && Config.machineId.equals(machineId) && Config.priority.equals(priority) && this.authenticationTime == authenticationTime) {
+            Log.WARN.log("Connection " + this.getConnectionName() + " claimed to be this machine, closing connection");
+            this.close();
+        }
+        this.machinePriority.set(priority);
+        this.machineName.set(machineId);
+        this.write(MachineAction.AUTHENTICATE, getHash(hashRequest, machineId, authenticationTime), true);
+        this.otherAuthenticated.set(true);
+        if (this.authenticated.get()) {
+            this.postAuth.forEach(consumer -> consumer.accept(this));
+            this.postAuth.clear();
+        }
     }
 
     /**
@@ -257,23 +293,46 @@ public class TransferSocket {
      */
     @Action(MachineAction.AUTHENTICATE)
     public void authenticate(byte[] hash, Boolean authenticate) {// authenticate here is for not confusing var args
-        if (Arrays.equals(this.getHash(this.hashRequest, Config.machineId.getBytes(Charset.forName("UTF-8")), this.authenticationTime), hash) && authenticate && this.authenticationTime <= System.currentTimeMillis() && this.authenticationTime > System.currentTimeMillis() - 15_000) {
+        if (Arrays.equals(getHash(this.hashRequest, Config.machineId, this.authenticationTime), hash) && authenticate && this.authenticationTime <= System.currentTimeMillis() && this.authenticationTime > System.currentTimeMillis() - 15_000) {
             this.authenticated.set(true);
-            Log.INFO.log("Connection from " + this.socket.getRemoteSocketAddress() + " authenticated");
+            Log.INFO.log("Connection from " + this.getConnectionName() + " authenticated");
             this.localMachine.registerSocket(this);
+            if (this.otherAuthenticated.get()) {
+                this.postAuth.forEach(consumer -> consumer.accept(this));
+                this.postAuth.clear();
+            }
         } else {
-            Log.WARN.log("Connection from " + this.socket.getRemoteSocketAddress() + " failed authentication");
+            Log.WARN.log("Connection from " + this.getConnectionName() + " failed authentication");
             this.close();
         }
     }
 
-    private byte[] getHash(byte[] hashRequest, byte[] machineId, long time) {// with integrated time
-        byte[] digestion = new byte[Config.authenticationKey.length() + hashRequest.length + machineId.length + Long.BYTES];
+    /**
+     * Hashes for authentication the arguments along with the {@link Config#authenticationKey}.
+     *
+     * @param hashRequest the random sequence of bytes to hash with.
+     * @param machineId the machine id to hash with.
+     * @param time the millisecond representation of time to hash with.
+     * @return the hash of the paramaters and the {@link Config#authenticationKey}
+     */
+    private static byte[] getHash(byte[] hashRequest, String machineId, long time) {// with integrated time
+        byte[] machineIdBytes = machineId.getBytes(Charset.forName("UTF-8"));
         byte[] keyBytes = Config.authenticationKey.getBytes(Charset.forName("UTF-8"));
+        byte[] digestion = new byte[keyBytes.length + hashRequest.length + machineIdBytes.length + Long.BYTES];
         System.arraycopy(hashRequest, 0, digestion, 0, hashRequest.length);
         System.arraycopy(keyBytes, 0, digestion, hashRequest.length, keyBytes.length);
-        System.arraycopy(machineId, 0, digestion, hashRequest.length + keyBytes.length, machineId.length);
-        System.arraycopy(ObjectSerialization.serialize(Long.class, time), 0, digestion, hashRequest.length + keyBytes.length + machineId.length, Long.BYTES);
+        System.arraycopy(machineIdBytes, 0, digestion, hashRequest.length + keyBytes.length, machineIdBytes.length);
+        System.arraycopy(ObjectSerialization.serialize(Long.class, time), 0, digestion, hashRequest.length + keyBytes.length + machineIdBytes.length, Long.BYTES);
         return DIGEST.digest(digestion);// hashes the digestion
+    }
+
+    public void registerAuthenticationAction(Consumer<TransferSocket> consumer) {
+        if (this.otherAuthenticated.get() && this.authenticated.get()) consumer.accept(this);
+        else this.postAuth.add(consumer);
+    }
+
+    @Override
+    public int compareTo(TransferSocket o) {
+        return this.machinePriority.get() - o.machinePriority.get();
     }
 }

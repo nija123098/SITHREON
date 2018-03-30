@@ -1,8 +1,9 @@
 package com.nija123098.sithreon.backend.command;
 
 import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.objects.Repository;
+import com.nija123098.sithreon.backend.util.FunctionPair;
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.Repository;
 import javafx.util.Pair;
 
 import java.lang.reflect.InvocationTargetException;
@@ -135,13 +136,21 @@ public abstract class Command {
         Pair<Object, Integer> pair;
         String rollingArgs = args;
         for (int i = 0; i < this.argTypes.length; i++) {
-            try {
-                Conversion<Object> conversion = CONVERSION_MAP.get(this.argTypes[i]);
-                if (conversion == null) pair = null;
-                else pair = conversion.apply(rollingArgs);
-            } catch (Exception e) {
-                Log.WARN.log("Unable to invoke command due to exception converting args to objects", e);
-                return;
+            if (this.argTypes[i].isEnum()) {
+                if (rollingArgs.contains(" ")) pair = null;
+                else {
+                    String arg = rollingArgs.substring(0, rollingArgs.indexOf(' '));
+                    pair = new FunctionPair<>(Stream.of(this.argTypes[i].getEnumConstants()).filter(o -> ((Enum<?>) o).name().equalsIgnoreCase(arg)).findFirst().orElse(null), (e) -> e == null ? 0 : ((Enum<?>) e).name().length());
+                }
+            } else {
+                try {
+                    Conversion<Object> conversion = CONVERSION_MAP.get(this.argTypes[i]);
+                    if (conversion == null) pair = null;
+                    else pair = conversion.apply(rollingArgs);
+                } catch (Exception e) {
+                    Log.WARN.log("Unable to invoke command due to exception converting arg " + i + " to an object", e);
+                    return;
+                }
             }
             if (pair == null) objectArguments[i] = ((Supplier<?>) DEFAULT_MAP.get(this.argTypes[i])).get();
             else {

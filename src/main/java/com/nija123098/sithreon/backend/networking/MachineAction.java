@@ -2,6 +2,11 @@ package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.command.Command;
+import com.nija123098.sithreon.backend.machines.CodeCheckClient;
+import com.nija123098.sithreon.backend.machines.GameServer;
+import com.nija123098.sithreon.backend.machines.SuperServer;
+import com.nija123098.sithreon.backend.objects.Match;
+import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.ByteBuffer;
 import com.nija123098.sithreon.backend.util.Log;
 
@@ -15,17 +20,29 @@ import java.util.stream.Stream;
  * invocation for transmitting {@link Command}s
  * other actions between machines between machines.
  *
- * Machine actions are compeleted by invoking a {@link Method}.
+ * Machine actions are completed by invoking a {@link Method}.
  *
  * @author nija123098
  */
 public enum MachineAction {
     /** The action for initiating authentication. */
-    REQUEST_AUTHENTICATION(TransferSocket.class),
-    /** The action for authentication, the response to {@link MachineAction#REQUEST_AUTHENTICATION} */
-    AUTHENTICATE(TransferSocket.class),
-    /** The action to close all connected {@link Machine}s to close the entire network */
-    CLOSE_ALL(Machine.class),;
+    REQUEST_AUTHENTICATION(TransferSocket.class),// must stay at ordinal 0
+    /** The action for authentication, the response to {@link MachineAction#REQUEST_AUTHENTICATION}. */
+    AUTHENTICATE(TransferSocket.class),// must stay at ordinal 1
+    /** The action to close all connected {@link Machine}s to close the entire network. */
+    CLOSE_ALL(Machine.class),
+    /** The action to signal that the sender is ready to complete another task. */
+    READY_TO_SERVE(SuperServer.class),
+    /** The action to initiate a code security check for the indicated {@link Repository}. */
+    CHECK_REPO(CodeCheckClient.class),
+    /** The action to respond with approval or denial of the {@link Repository} instance's code. */
+    REPO_CODE_REPORT(SuperServer.class),
+    /** The action to start a game specified by a {@link Match}. */
+    RUN_GAME(GameServer.class),
+    /** The action to indicate that one of a requested game's {@link Repository} is out of date. */
+    MATCH_OUT_OF_DATE(SuperServer.class),
+    /** The action to respond with a result from a {@link Match}. */
+    MATCH_COMPLETE(SuperServer.class),;
 
     /**
      * The location to find the action's method.
@@ -71,10 +88,24 @@ public enum MachineAction {
      */
     public byte[] write(Object... args) {
         this.ensureMethodLoad();
-        if (this.argumentTypes.get().length != args.length)
-            Log.ERROR.log("Invalid argument length for MachineAction " + this);
+        if (this.argumentTypes.get().length != args.length) {
+            boolean pass = false;
+            for (Class<?> clazz : this.argumentTypes.get()) {
+                if (TransferSocket.class.equals(clazz)){
+                    if (this.argumentTypes.get().length - 1 != args.length)
+                        Log.ERROR.log("Invalid argument length for MachineAction " + this);
+                    else {
+                        pass = true;
+                        break;
+                    }
+                }
+            }
+            if (!pass) Log.ERROR.log("Invalid argument length for MachineAction " + this);
+        }
+        for (int i = 0; i < args.length; i++)
+            if (args[i] == null) Log.ERROR.log("Argument found null in write for " + this.name() + " while expecting " + this.argumentTypes.get()[i].getName());
         for (int i = 0; i < this.argumentTypes.get().length; i++) {
-            if (!this.argumentTypes.get()[i].isInstance(args[i]))
+            if (!TransferSocket.class.equals(this.argumentTypes.get()[i]) && !this.argumentTypes.get()[i].isInstance(args[i]))
                 Log.ERROR.log("Invalid argument given for MachineAction " + this + " at " + i + " expected " + this.argumentTypes.get()[i].getSimpleName() + " got " + args[i].getClass().getSimpleName());
         }
         if (this.argumentTypes.get().length == 0) return new byte[]{(byte) this.ordinal()};
@@ -82,6 +113,7 @@ public enum MachineAction {
         bytes.add((byte) this.ordinal());
         byte[] serialized;
         for (int i = 0; i < this.argumentTypes.get().length; i++) {
+            if (TransferSocket.class.equals(this.argumentTypes.get()[i])) continue;
             serialized = ObjectSerialization.serialize(this.argumentTypes.get()[i], args[i]);
             bytes.add(ObjectSerialization.serialize(Integer.class, serialized.length));
             bytes.add(serialized);
@@ -100,13 +132,16 @@ public enum MachineAction {
      * @return the objects to invoke on the appropriate method or null.
      * if the objects that should be specified are not completely within the buffer.
      */
-    public Object[] read(ByteBuffer bytes) {
+    public Object[] read(TransferSocket socket, ByteBuffer bytes) {
         this.ensureMethodLoad();
         if (this.argumentTypes.get().length == 0) return new Object[0];
         Object[] objects = new Object[this.argumentTypes.get().length];
         byte argument = 0;
         int serializeLength, objectIndex = 0;
-        for (int i = 1; i < bytes.size(); i++) {// the first byte has already been used to determine that this
+        for (int i = 0; i < this.argumentTypes.get().length; i++)
+            if (TransferSocket.class.equals(this.argumentTypes.get()[i])) objects[i] = socket;
+        for (int i = 1; i < bytes.size(); i++) {// the first byte has already been used to determine the action
+            if (objects[objectIndex] != null) ++objectIndex;
             if (bytes.size() < i + Integer.BYTES) return null;// instance should be used for handling the network input
             serializeLength = ObjectSerialization.deserialize(Integer.class, bytes.getBytes(false, i, Integer.BYTES));
             i += Integer.BYTES;
@@ -117,6 +152,10 @@ public enum MachineAction {
                 bytes.removeRange(0, i + 1);
                 return objects;
             }
+        }
+        if (objectIndex >= this.argumentTypes.get().length || (objectIndex + 1 >= this.argumentTypes.get().length && objects[objectIndex] instanceof TransferSocket)) {
+            bytes.clear();
+            return objects;
         }
         return null;
     }
@@ -129,7 +168,11 @@ public enum MachineAction {
      * @param args   the object arguments to invoke th specified method.
      */
     public void act(TransferSocket socket, Object... args) {
-        this.ensureMethodLoad();
+        if (this.machineAction && socket.getLocalMachine().getClass() != this.method.get().getDeclaringClass() && !Machine.class.equals(this.method.get().getDeclaringClass())) {
+            Log.WARN.log("Connection " + socket.getConnectionName() + " sent " + this + " action to the wrong kind of Machine, closing connection");
+            socket.close();
+            return;
+        }
         try {
             this.method.get().invoke(this.machineAction ? socket.getLocalMachine() : socket, args);
         } catch (IllegalAccessException e) {

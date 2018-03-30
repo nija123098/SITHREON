@@ -1,16 +1,24 @@
 package com.nija123098.sithreon.backend;
 
+import com.nija123098.sithreon.backend.machines.SuperServer;
+import com.nija123098.sithreon.backend.objects.Match;
+import com.nija123098.sithreon.backend.objects.MatchUp;
+import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.PriorityLevel;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
+import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -18,30 +26,83 @@ import java.util.stream.Stream;
  *
  * @author nija123098
  */
-public enum Database {
+public class Database<K, V> extends HashMap<K, V> {
     /**
-     * Stores the millis of the last update handled by the SITHREON network
+     * A list of registered repos where repos registered will always have true as their value.
      */
-    REPO_LAST_UPDATE("0"),
+    public static final Database<Repository, Boolean> REGISTERED_REPOS = new Database<>(false, "registered_repos", Repository.class, Boolean.class);
+
     /**
-     * Pairings of competitors for the record of wins and losses
+     * Stores the commit hash of the last repo HEAD commit handled by the SITHREON network.
      */
-    WINNER_PAIRING("NULL"),;
+    public static final Database<Repository, String> REPO_LAST_HEAD_HASH = new Database<>(null, "repo_last_update", Repository.class, String.class);
+
+    /**
+     * Storage of if the repository has been approved.
+     */
+    public static final Database<Repository, Boolean> REPO_APPROVAL = new Database<>(false, "repo_approval", Repository.class, Boolean.class);
+
+    /**
+     * Pairings of competitors for the record of wins and losses.
+     */
+    public static final Database<Repository, PriorityLevel> PRIORITY_LEVEL = new Database<>(PriorityLevel.MEDIUM, "priority_level", Repository.class, PriorityLevel.class);
+
+    /**
+     * A list of matches which the previous {@link SuperServer} uptime had not been able to complete.
+     */
+    public static final Database<Match, Boolean> MATCHES_TO_DO = new Database<>(false, "matches_to_do", Match.class, Boolean.class);
+
+    /**
+     * Stores a map of match ups and their victors where true represents the first repository's victory, and false represents the second repository's victory.
+     */
+    public static final Database<MatchUp, Boolean> FIRST_WINS = new Database<>(null, "first_victor", MatchUp.class, Boolean.class);
 
     /**
      * Stores if the database has been altered to prevent duplicate saves.
      */
     private static final AtomicBoolean DATABASE_CHANGE = new AtomicBoolean();
-    private final Map<String, String> map = new HashMap<>();
-    private final String def;
 
     /**
-     * Constructs an instance to act as a category for a key-value system.
-     *
-     * @param def the default value to return when there is no entry.
+     * An array of the databases instances.
      */
-    Database(String def) {
-        this.def = def;
+    private static final Set<Database<?, ?>> DATABASES;
+
+    static {
+        DATABASES = Stream.of(Database.class.getDeclaredFields()).filter(field -> field.getType().equals(Database.class)).map(field -> {
+            try {
+                return (Database<?, ?>) field.get(null);
+            } catch (IllegalAccessException e) {
+                Log.ERROR.log("Malformed Database field: " + field.getName());
+                return null;// won't occur
+            }
+        }).collect(Collectors.toSet());
+    }
+
+    private static final Map<Class<?>, Function<String, Object>> FROM_STRING_MAP = new HashMap<>();
+    private static final Map<Class<?>, Function<Object, String>> TO_STRING_MAP = new HashMap<>();
+
+    static {
+        registerConversion(Repository.class, Repository::getRepo);
+        registerConversion(Boolean.class, Boolean::parseBoolean);
+        registerConversion(PriorityLevel.class, PriorityLevel::valueOf);
+        registerConversion(String.class, Function.identity());
+        registerConversion(MatchUp.class, s -> {
+            String[] split = s.split(Pattern.quote("+"));
+            return new MatchUp(Repository.getRepo(split[0]), Repository.getRepo(split[1]));
+        });
+        registerConversion(Match.class, s -> {
+            String[] split = s.split(Pattern.quote("+"));
+            return new Match(Repository.getRepo(split[0]), Repository.getRepo(split[1]), split[2], split[3], Long.parseLong(split[4]));
+        });
+    }
+
+    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject, Function<E, String> toString){
+        FROM_STRING_MAP.put(clazz, (Function<String, Object>) toObject);
+        TO_STRING_MAP.put(clazz, (Function<Object, String>) toString);
+    }
+
+    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject){
+        registerConversion(clazz, toObject, Objects::toString);
     }
 
     /**
@@ -53,12 +114,9 @@ public enum Database {
         File[] files = dataFile.toFile().listFiles();
         Optional<Long> lastDataTime = Stream.of(files == null ? new File[0] : files).map(file -> Long.parseLong(file.getName())).reduce(Math::max);
         lastDataTime.ifPresent(aLong -> {// loads the most up to date database file
-            for (Database database : Database.values()) {
+            for (Database database : DATABASES) {
                 try {
-                    Files.readAllLines(database.getPath(aLong)).forEach(s -> {
-                        int index = s.indexOf('=');
-                        database.map.put(s.substring(0, index), s.substring(index + 1, s.length()));
-                    });
+                    database.loadData(Files.readAllLines(database.getPath(aLong), Charset.forName("UTF-8")));
                 } catch (IOException e) {
                     Log.ERROR.log("Could not read database", e);
                 }
@@ -75,11 +133,9 @@ public enum Database {
             } catch (IOException e) {
                 Log.ERROR.log("IOException making data directory", e);
             }
-            for (Database database : Database.values()) {
-                List<String> data = new ArrayList<>();
-                database.map.forEach((key, value) -> data.add(key + "=" + value));
+            for (Database database : DATABASES) {
                 try {
-                    Files.write(database.getPath(time), data, StandardOpenOption.CREATE);
+                    Files.write(database.getPath(time), database.getSaveData(), Charset.forName("UTF-8"), StandardOpenOption.CREATE);
                 } catch (IOException e) {
                     try {
                         Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
@@ -96,29 +152,81 @@ public enum Database {
         Runtime.getRuntime().addShutdownHook(ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Save Hook", false, save));// Saves the database on shutdown
     }
 
-    public void put(Object key, String value) {
+    /**
+     * The default value to return if no entry is found.
+     */
+    private final V def;
+
+    /**
+     * The name of this database table.
+     */
+    private final String name;
+
+    /**
+     * The class type for the key values.
+     */
+    private final Class<K> keyType;
+
+    /**
+     * The class type for value values.
+     */
+    private final Class<V> valueType;
+
+    /**
+     * Constructs an instance to act as a category for a simple key-value database system.
+     *
+     * @param def the default value to return when there is no entry.
+     * @param name the name of the database table.
+     * @param keyType the key type.
+     * @param valueType the value type.
+     */
+    private Database(V def, String name, Class<K> keyType, Class<V> valueType) {
+        this.def = def;
+        this.name = name;
+        this.keyType = keyType;
+        this.valueType = valueType;
+    }
+
+    @Override
+    public V get(Object key) {
+        return super.getOrDefault(key, this.def);
+    }
+
+    @Override
+    public V put(K key, V value) {
         DATABASE_CHANGE.set(true);
-        this.map.put(key.toString(), value);
+        return super.put(key, value);
     }
 
-    public String get(Object key) {
-        return this.map.getOrDefault(key.toString(), this.def);
-    }
-
-    public void reset(Object key) {
-        DATABASE_CHANGE.set(true);
-        this.map.remove(key.toString());
-    }
-
-    public Set<String> keySet() {
-        return this.map.keySet();
-    }
-
-    public void forEach(BiConsumer<String, String> consumer) {
-        this.map.forEach(consumer);
-    }
-
+    /**
+     * Gets the {@link Path} of the {@link Database} instance.
+     *
+     * @param time the time to save the value.
+     * @return the {@link Path} of the {@link Database} save file.
+     */
     private Path getPath(long time) {
-        return Paths.get("data", Long.toString(time), this.name().toLowerCase() + ".txt");
+        return Paths.get("data", Long.toString(time), this.name.toLowerCase() + ".txt");
+    }
+
+    /**
+     * Gets the data to represent the values of the {@link Database}.
+     *
+     * @return the data to represent the values of the {@link Database}.
+     */
+    private List<String> getSaveData(){
+        return this.entrySet().stream().map(kvEntry -> TO_STRING_MAP.get(this.keyType).apply(kvEntry.getKey()) + "=" + TO_STRING_MAP.get(this.valueType).apply(kvEntry.getValue())).collect(Collectors.toList());
+    }
+
+    /**
+     * Loads the data for this instance from the provided values.
+     *
+     * @param data the {@link String} representations of the {@link Database} values.
+     */
+    private void loadData(List<String> data){
+        this.clear();
+        for (String s : data){
+            int index = s.indexOf('=');
+            this.put((K) FROM_STRING_MAP.get(this.keyType).apply(s.substring(0, index)), (V) FROM_STRING_MAP.get(this.valueType).apply(s.substring(index + 1, s.length())));
+        }
     }
 }

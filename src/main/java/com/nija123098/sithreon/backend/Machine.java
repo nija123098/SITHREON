@@ -2,6 +2,7 @@ package com.nija123098.sithreon.backend;
 
 import com.nija123098.sithreon.backend.networking.Action;
 import com.nija123098.sithreon.backend.networking.MachineAction;
+import com.nija123098.sithreon.backend.networking.ManagedMachineType;
 import com.nija123098.sithreon.backend.networking.TransferSocket;
 import com.nija123098.sithreon.backend.util.KeepAliveUtil;
 import com.nija123098.sithreon.backend.util.Log;
@@ -79,6 +80,29 @@ public abstract class Machine {
      */
     public void deregisterSocket(TransferSocket socket) {
         this.sockets.remove(socket);
+    }
+
+    /**
+     * The {@link MachineAction} method for indicating that a {@link MachineAction} is ready to server.
+     *
+     * @param machineType the self reported {@link ManagedMachineType} reporting to be ready to serve.
+     * @param socket the socket representing the {@link ManagedMachineType} reporting.
+     */
+    @Action(MachineAction.READY_TO_SERVE)
+    public void readyToServe(ManagedMachineType machineType, TransferSocket socket){
+        this.notifyReady(machineType, socket);
+    }
+
+    /**
+     * The {@link Machine#readyToServe(ManagedMachineType, TransferSocket)} method that can be
+     * overridden to indicate that the machine can make use of a {@link Machine} reporting to be ready to serve.
+     *
+     * @param machineType the self reported {@link ManagedMachineType} reporting to be ready to serve.
+     * @param socket the socket representing the {@link ManagedMachineType} reporting.
+     */
+    protected void notifyReady(ManagedMachineType machineType, TransferSocket socket){
+        Log.WARN.log("Managed machine of type " + machineType + " from " + socket.getConnectionName() + " reported ready, closing connection");
+        socket.close();
     }
 
     /**

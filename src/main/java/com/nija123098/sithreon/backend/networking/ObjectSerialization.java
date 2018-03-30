@@ -1,13 +1,16 @@
 package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
-import com.nija123098.sithreon.backend.util.Repository;
+import com.nija123098.sithreon.backend.objects.Match;
+import com.nija123098.sithreon.backend.objects.MatchUp;
+import com.nija123098.sithreon.backend.objects.Repository;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * Handles the serialization of objects
@@ -26,6 +29,14 @@ public class ObjectSerialization {
         registerSerialization(Repository.class, repository -> serialize(String.class, repository.toString()), bytes -> Repository.getRepo(deserialize(String.class, bytes)));
         registerSerialization(Boolean.class, bool -> new byte[]{bool ? ((byte) 1) : 0}, bytes -> bytes[0] == 1);
         registerSerialization(byte[].class, bytes -> bytes, bytes -> bytes);
+        registerSerialization(MatchUp.class, matchUp -> serialize(String.class, matchUp.toString()), bytes -> {
+            String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
+            return new MatchUp(Repository.getRepo(split[0]), Repository.getRepo(split[1]));
+        });
+        registerSerialization(Match.class, match -> serialize(String.class, match.toString()), bytes -> {
+            String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
+            return new Match(Repository.getRepo(split[0]), Repository.getRepo(split[1]), split[2], split[3], Long.parseLong(split[4]));
+        });
     }
 
     /**
@@ -50,6 +61,7 @@ public class ObjectSerialization {
      * @return the bytes representing the object.
      */
     public static <E> byte[] serialize(Class<E> type, E object) {
+        if (type.isEnum()) return new byte[]{(byte) ((Enum) object).ordinal()};
         return ((Function<E, byte[]>) TO_BYTES.get(type)).apply(object);
     }
 
@@ -62,6 +74,7 @@ public class ObjectSerialization {
      * @return the object represented by the bytes.
      */
     public static <E> E deserialize(Class<E> type, byte[] bytes) {
+        if (type.isEnum()) return type.getEnumConstants()[bytes[0]];
         return ((Function<byte[], E>) TO_OBJECT.get(type)).apply(bytes);
     }
 }

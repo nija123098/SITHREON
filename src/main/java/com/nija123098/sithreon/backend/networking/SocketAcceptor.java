@@ -55,6 +55,7 @@ public class SocketAcceptor {
      * Closes this acceptor and it's accepting thread.
      */
     private void close() {
+        if (this.closed.get()) return;
         this.closed.set(true);
         this.sockets.forEach(TransferSocket::close);
     }

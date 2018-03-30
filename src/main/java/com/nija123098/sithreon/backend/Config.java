@@ -56,14 +56,19 @@ public class Config {
     public static String gameServerAddress;
 
     /**
+     * The port to communicate on.
+     */
+    public static Integer port;
+
+    /**
      * The unique id of the machine.
      */
     public static String machineId;
 
     /**
-     * The port to communicate on.
+     * The priority this client has to serve a server.
      */
-    public static Integer port;
+    public static Integer priority;
 
     /**
      * The level to display logs at.
