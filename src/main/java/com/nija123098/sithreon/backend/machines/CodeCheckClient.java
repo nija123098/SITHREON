@@ -23,17 +23,18 @@ public class CodeCheckClient extends Machine {
 
     public CodeCheckClient() {
         try {
-            this.superServerSocket = new TransferSocket(this, Config.superServerAddress);
+            this.superServerSocket = new TransferSocket(this, Config.superServerAddress, Config.externalPort);
         } catch (IOException e) {
             Log.ERROR.log("Unable to establish connection to super server due to IOException", e);
             throw new RuntimeException();// Won't occur
         }
         this.superServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.CODE_CHECK));
     }
+
     @Action(MachineAction.CHECK_REPO)
-    public void check(Repository repository){
+    public void check(Repository repository) {
         //
-        this.superServerSocket.write(MachineAction.REPO_CODE_REPORT, repository, "123abc", true, "report");// todo
+        this.superServerSocket.write(MachineAction.REPO_CODE_REPORT, repository, repository.getHeadHash(), true, "report");// todo implement, have logging here
         this.superServerSocket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.CODE_CHECK);
     }
 }

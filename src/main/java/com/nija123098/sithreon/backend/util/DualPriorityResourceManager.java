@@ -1,15 +1,18 @@
 package com.nija123098.sithreon.backend.util;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.function.BiConsumer;
 
 /**
  * A resource manager for pairs of resources.
- *
+ * <p>
  * When either one of one resource is given to the manager,
  * if the other type is available the other will be removed
  * and the task assigned to the manager will be executed
  * with the removed other type instance and the given instance.
+ * <p>
  * If no other type is available then it will be put in a wait
  * list to be used with the next other type object given.
  *
@@ -47,7 +50,7 @@ public class DualPriorityResourceManager<F, S> {
      * @param f a {@link F} resource to make available.
      * @return the {@link S} resource paired with it, or null if none is currently available.
      */
-    public synchronized S giveFirst(F f){
+    public S giveFirst(F f) {
         if (this.secondWaiting.isEmpty()) this.firstWaiting.add(f);
         else {
             S s = secondWaiting.poll();
@@ -63,7 +66,7 @@ public class DualPriorityResourceManager<F, S> {
      * @param s a {@link S} resource to make available.
      * @return the {@link F} resource paired with it, or null if none is currently available.
      */
-    public synchronized F giveSecond(S s){
+    public F giveSecond(S s) {
         if (this.firstWaiting.isEmpty()) this.secondWaiting.add(s);
         else {
             F f = this.firstWaiting.poll();
@@ -71,6 +74,26 @@ public class DualPriorityResourceManager<F, S> {
             return f;
         }
         return null;
+    }
+
+    /**
+     * Removes the {@link F} resource if it is in the {@code firstWaiting} queue.
+     *
+     * @param f the resource to remove.
+     * @return if the resource was found in the queue.
+     */
+    public boolean removeFirst(F f) {
+        return this.firstWaiting.remove(f);
+    }
+
+    /**
+     * Removes the {@link S} resource if it is in the {@code secondWaiting} queue.
+     *
+     * @param s the resource to remove.
+     * @return if the resource was found in the queue.
+     */
+    public boolean removeSecond(S s) {
+        return this.secondWaiting.remove(s);
     }
 
     /**

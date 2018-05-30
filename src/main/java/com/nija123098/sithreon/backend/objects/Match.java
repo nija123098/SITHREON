@@ -1,5 +1,7 @@
 package com.nija123098.sithreon.backend.objects;
 
+import java.util.Objects;
+
 /**
  * The object specifying a match between two {@link Repository}
  * instances including the hash of the approved commit of each.
@@ -20,11 +22,11 @@ public class Match extends MatchUp implements Comparable<Match> {
      * Constructs a standard match whose repository order will be sorted
      * according to {@link Repository#compareTo(Repository)}.
      *
-     * @param one one {@link Repository}.
-     * @param other another {@link Repository}.
-     * @param oneHash the expected and approved HEAD hash of the one {@link Repository}.
+     * @param one       one {@link Repository}.
+     * @param other     another {@link Repository}.
+     * @param oneHash   the expected and approved HEAD hash of the one {@link Repository}.
      * @param otherHash the expected and approved HEAD hash of the other {@link Repository}.
-     * @param time the time the match was initially scheduled.
+     * @param time      the time the match was initially scheduled.
      */
     public Match(Repository one, Repository other, String oneHash, String otherHash, long time) {
         super(one, other);
@@ -74,6 +76,15 @@ public class Match extends MatchUp implements Comparable<Match> {
         return Math.min(this.getFirst().getPriority(), this.getSecond().getPriority());
     }
 
+    /**
+     * Gets the {@link MatchUp} for this instance.
+     *
+     * @return the {@link MatchUp} for this instance.
+     */
+    public MatchUp getMatchUp() {
+        return new MatchUp(this.getFirst(), this.getSecond());
+    }
+
     @Override
     public int compareTo(Match o) {
         if (o.getLowPriority() != this.getLowPriority()) return this.getLowPriority() - o.getLowPriority();
@@ -84,5 +95,18 @@ public class Match extends MatchUp implements Comparable<Match> {
     @Override
     public String toString() {
         return super.toString() + "+" + this.firstHash + "+" + this.secondHash + "+" + this.time;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Match other = (Match) o;
+        return super.equals(other) && this.time == other.time && this.firstHash.equals(other.firstHash) && this.secondHash.equals(other.secondHash);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.firstHash, this.secondHash, this.time);
     }
 }

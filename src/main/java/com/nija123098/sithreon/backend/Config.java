@@ -36,6 +36,11 @@ public class Config {
     public static String encryptionKey;
 
     /**
+     * The number of rounds for encryption.
+     */
+    public static Integer encryptionRounds;
+
+    /**
      * The key for verification of a client.
      */
     public static String authenticationKey;
@@ -44,6 +49,11 @@ public class Config {
      * The hashing algorithm to use.
      */
     public static String hashingAlgorithm;
+
+    /**
+     * The number of rounds a hash should be done for authentication.
+     */
+    public static Integer hashingRounds;
 
     /**
      * The address of the super server.
@@ -56,9 +66,14 @@ public class Config {
     public static String gameServerAddress;
 
     /**
-     * The port to communicate on.
+     * The port to communicate externally on.
      */
-    public static Integer port;
+    public static Integer externalPort;
+
+    /**
+     * The port to communicate internally on.
+     */
+    public static Integer internalPort;
 
     /**
      * The unique id of the machine.
@@ -69,6 +84,11 @@ public class Config {
      * The priority this client has to serve a server.
      */
     public static Integer priority;
+
+    /**
+     * The number of milliseconds between database saves.
+     */
+    public static Integer databaseSaveDelay;
 
     /**
      * The level to display logs at.

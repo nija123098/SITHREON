@@ -17,15 +17,15 @@ import java.io.IOException;
  * @author nija123098
  */
 public class RunnerClient extends Machine {
-    private final TransferSocket superServerSocket;
+    private final TransferSocket gameServerSocket;
 
     public RunnerClient() {
         try {
-            this.superServerSocket = new TransferSocket(this, Config.gameServerAddress);
+            this.gameServerSocket = new TransferSocket(this, Config.gameServerAddress, Config.internalPort);
         } catch (IOException e) {
             Log.ERROR.log("Unable to establish connection to game server due to IOException", e);
             throw new RuntimeException();// Won't occur
         }
-        this.superServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER));
+        this.gameServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER));
     }
 }

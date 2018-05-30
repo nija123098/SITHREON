@@ -1,14 +1,13 @@
 package com.nija123098.sithreon.backend.objects;
 
 import com.nija123098.sithreon.backend.Database;
+import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.CodeCheckClient;
 import com.nija123098.sithreon.backend.util.Log;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -16,24 +15,11 @@ import java.util.concurrent.TimeUnit;
  *
  * @author nija123098
  */
-public class Repository implements Comparable<Repository>{
+public class Repository implements Comparable<Repository> {
     /**
      * A cache of repository objects.
      */
     private static final Map<String, Repository> CACHE = new HashMap<>();
-    /**
-     * The identifications for the repository.
-     */
-    private String repo;
-
-    /**
-     * Constructs an instance specified a owner/name representation.
-     *
-     * @param repo the repo to represent.
-     */
-    private Repository(String repo) {
-        this.repo = repo;
-    }
 
     /**
      * Requires the a repository instance or null if the specified repo does not exist.
@@ -50,24 +36,46 @@ public class Repository implements Comparable<Repository>{
     }
 
     /**
+     * The identifications for the repository.
+     */
+    private final String repo;
+
+    /**
+     * Constructs an instance specified a owner/name representation.
+     *
+     * @param repo the repo to represent.
+     */
+    private Repository(String repo) {
+        this.repo = repo;
+    }
+
+    /**
      * Gets the latest HEAD hash of the repository.
      *
      * @return the latest HEAD hash.
      */
-    public String getHeadHash(){
+    public String getHeadHash() {
+        Process process;
         try {
-            Process process = new ProcessBuilder("git", "ls-remote", "git://github.com/" + this.repo + ".git").start();
+            process = new ProcessBuilder("git", "ls-remote", "git://github.com/" + this.repo + ".git", "HEAD").start();
+        } catch (IOException e) {
+            Log.ERROR.log("Unable to connect to Github", e);
+            return null;// won't occur
+        }
+        try {
             process.waitFor(15, TimeUnit.SECONDS);
-            int exitCode = process.exitValue();
-            if (exitCode != 0) return null;// probably invalid
-            byte[] bytes = new byte[40];
-            process.getInputStream().read(bytes);
+            if (process.exitValue() != 0) Log.ERROR.log("Unable to connect to Github");
+            byte[] bytes = new byte[40];// SHA-1 length of hex
+            if (process.getInputStream().read(bytes) != 40) throw new IOException("Could not read all hash bytes");
             process.destroy();// shouldn't be necessary
             return new String(bytes, Charset.forName("UTF-8"));
-        } catch (IOException | InterruptedException e) {
-            Log.WARN.log("Exception getting HEAD hash process", e);
+        } catch (IOException e) {
+            Log.ERROR.log("Exception getting HEAD hash process", e);
+        } catch (InterruptedException e) {
+            if (!Machine.MACHINE.get().closing()) Log.ERROR.log("Exception getting HEAD hash process", e);
+            else process.destroyForcibly();
         } catch (IllegalThreadStateException e) {
-            Log.WARN.log("HEAD get process timed out", e);
+            Log.ERROR.log("HEAD get process timed out", e);
         }
         return null;
     }
@@ -77,7 +85,7 @@ public class Repository implements Comparable<Repository>{
      *
      * @return the last HEAD hash checked for approval.
      */
-    public String getLastCheckedHeadHash(){
+    public String getLastCheckedHeadHash() {
         return Database.REPO_LAST_HEAD_HASH.get(this);
     }
 
@@ -86,15 +94,25 @@ public class Repository implements Comparable<Repository>{
      *
      * @return if the
      */
-    public boolean isUpToDate(){
+    public boolean isUpToDate() {
         return this.getLastCheckedHeadHash() != null && Objects.equals(this.getLastCheckedHeadHash(), this.getHeadHash());
     }
 
-    public boolean isApproved(){
+    /**
+     * If the repository is approved for running in matches.
+     *
+     * @return if the repository is approved for running in matches.
+     */
+    public boolean isApproved() {
         return Database.REPO_APPROVAL.get(this) && this.isUpToDate();
     }
 
-    public int getPriority(){
+    /**
+     * Gets the priority of the repository for establishing the priority of it's matches.
+     *
+     * @return the priority of the repository.
+     */
+    public int getPriority() {
         return Database.PRIORITY_LEVEL.get(this).ordinal();
     }
 

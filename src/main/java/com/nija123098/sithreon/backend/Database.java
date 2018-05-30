@@ -28,6 +28,11 @@ import java.util.stream.Stream;
  */
 public class Database<K, V> extends HashMap<K, V> {
     /**
+     * An array of the databases instances.
+     */
+    private static final List<Database<?, ?>> DATABASES = new ArrayList<>();
+
+    /**
      * A list of registered repos where repos registered will always have true as their value.
      */
     public static final Database<Repository, Boolean> REGISTERED_REPOS = new Database<>(false, "registered_repos", Repository.class, Boolean.class);
@@ -62,22 +67,6 @@ public class Database<K, V> extends HashMap<K, V> {
      */
     private static final AtomicBoolean DATABASE_CHANGE = new AtomicBoolean();
 
-    /**
-     * An array of the databases instances.
-     */
-    private static final Set<Database<?, ?>> DATABASES;
-
-    static {
-        DATABASES = Stream.of(Database.class.getDeclaredFields()).filter(field -> field.getType().equals(Database.class)).map(field -> {
-            try {
-                return (Database<?, ?>) field.get(null);
-            } catch (IllegalAccessException e) {
-                Log.ERROR.log("Malformed Database field: " + field.getName());
-                return null;// won't occur
-            }
-        }).collect(Collectors.toSet());
-    }
-
     private static final Map<Class<?>, Function<String, Object>> FROM_STRING_MAP = new HashMap<>();
     private static final Map<Class<?>, Function<Object, String>> TO_STRING_MAP = new HashMap<>();
 
@@ -96,12 +85,12 @@ public class Database<K, V> extends HashMap<K, V> {
         });
     }
 
-    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject, Function<E, String> toString){
+    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject, Function<E, String> toString) {
         FROM_STRING_MAP.put(clazz, (Function<String, Object>) toObject);
         TO_STRING_MAP.put(clazz, (Function<Object, String>) toString);
     }
 
-    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject){
+    private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject) {
         registerConversion(clazz, toObject, Objects::toString);
     }
 
@@ -115,6 +104,7 @@ public class Database<K, V> extends HashMap<K, V> {
         Optional<Long> lastDataTime = Stream.of(files == null ? new File[0] : files).map(file -> Long.parseLong(file.getName())).reduce(Math::max);
         lastDataTime.ifPresent(aLong -> {// loads the most up to date database file
             for (Database database : DATABASES) {
+                if (!Files.exists(database.getPath(aLong))) continue;
                 try {
                     database.loadData(Files.readAllLines(database.getPath(aLong), Charset.forName("UTF-8")));
                 } catch (IOException e) {
@@ -135,7 +125,10 @@ public class Database<K, V> extends HashMap<K, V> {
             }
             for (Database database : DATABASES) {
                 try {
-                    Files.write(database.getPath(time), database.getSaveData(), Charset.forName("UTF-8"), StandardOpenOption.CREATE);
+                    List<String> saveData = database.getSaveData();
+                    if (!saveData.isEmpty()) {
+                        Files.write(database.getPath(time), saveData, Charset.forName("UTF-8"), StandardOpenOption.CREATE);
+                    }
                 } catch (IOException e) {
                     try {
                         Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
@@ -148,7 +141,7 @@ public class Database<K, V> extends HashMap<K, V> {
         };
 
         // Makes regular backups of the db
-        new ScheduledThreadPoolExecutor(1, (r) -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Scheduled Saver", true, r)).scheduleWithFixedDelay(save, 2, 2, TimeUnit.HOURS);
+        new ScheduledThreadPoolExecutor(1, r -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Scheduled Saver", true, r)).scheduleWithFixedDelay(save, Config.databaseSaveDelay, Config.databaseSaveDelay, TimeUnit.MILLISECONDS);
         Runtime.getRuntime().addShutdownHook(ThreadMaker.getThread(ThreadMaker.BACKEND, "Database Save Hook", false, save));// Saves the database on shutdown
     }
 
@@ -175,9 +168,9 @@ public class Database<K, V> extends HashMap<K, V> {
     /**
      * Constructs an instance to act as a category for a simple key-value database system.
      *
-     * @param def the default value to return when there is no entry.
-     * @param name the name of the database table.
-     * @param keyType the key type.
+     * @param def       the default value to return when there is no entry.
+     * @param name      the name of the database table.
+     * @param keyType   the key type.
      * @param valueType the value type.
      */
     private Database(V def, String name, Class<K> keyType, Class<V> valueType) {
@@ -185,6 +178,7 @@ public class Database<K, V> extends HashMap<K, V> {
         this.name = name;
         this.keyType = keyType;
         this.valueType = valueType;
+        DATABASES.add(this);
     }
 
     @Override
@@ -196,6 +190,11 @@ public class Database<K, V> extends HashMap<K, V> {
     public V put(K key, V value) {
         DATABASE_CHANGE.set(true);
         return super.put(key, value);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return this == o;
     }
 
     /**
@@ -213,7 +212,7 @@ public class Database<K, V> extends HashMap<K, V> {
      *
      * @return the data to represent the values of the {@link Database}.
      */
-    private List<String> getSaveData(){
+    private List<String> getSaveData() {
         return this.entrySet().stream().map(kvEntry -> TO_STRING_MAP.get(this.keyType).apply(kvEntry.getKey()) + "=" + TO_STRING_MAP.get(this.valueType).apply(kvEntry.getValue())).collect(Collectors.toList());
     }
 
@@ -222,9 +221,9 @@ public class Database<K, V> extends HashMap<K, V> {
      *
      * @param data the {@link String} representations of the {@link Database} values.
      */
-    private void loadData(List<String> data){
+    private void loadData(List<String> data) {
         this.clear();
-        for (String s : data){
+        for (String s : data) {
             int index = s.indexOf('=');
             this.put((K) FROM_STRING_MAP.get(this.keyType).apply(s.substring(0, index)), (V) FROM_STRING_MAP.get(this.valueType).apply(s.substring(index + 1, s.length())));
         }

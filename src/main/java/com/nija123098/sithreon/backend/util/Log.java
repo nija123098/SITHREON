@@ -34,13 +34,21 @@ public enum Log {
             return null;// won't occur
         }
     },
-    /** For exceptions which may cause problems. */
+    /**
+     * For exceptions which may cause problems.
+     */
     WARN(33),
-    /** For general semi-important info. */
+    /**
+     * For general semi-important info.
+     */
     INFO(34),
-    /** For info plausibly useful in debugging. */
+    /**
+     * For info plausibly useful in debugging.
+     */
     DEBUG(35),
-    /** For info likely not useful in debugging. */
+    /**
+     * For info likely not useful in debugging.
+     */
     TRACE(37),;
 
     /**

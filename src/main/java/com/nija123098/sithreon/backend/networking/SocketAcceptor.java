@@ -1,6 +1,5 @@
 package com.nija123098.sithreon.backend.networking;
 
-import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
@@ -28,10 +27,10 @@ public class SocketAcceptor {
      *
      * @param machine the {@link Machine} which this instance operates for.
      */
-    public SocketAcceptor(Machine machine) {
+    public SocketAcceptor(Machine machine, Integer port) {
         ServerSocket serverSocket = null;
         try {
-            serverSocket = new ServerSocket(Config.port);
+            serverSocket = new ServerSocket(port);
         } catch (IOException e) {
             Log.ERROR.log("Unable to make server socket", e);
         }
@@ -39,7 +38,7 @@ public class SocketAcceptor {
         ThreadMaker.getThread(ThreadMaker.NETWORK, "Socket Acceptor Thread", true, () -> {
             while (!this.closed.get()) {
                 try {
-                    Socket socket = this.serverSocket.accept();
+                    Socket socket = this.serverSocket.accept();// will not throw an NPE
                     if (this.closed.get()) return;// Ensure that this socket is not accepted while this is closed
                     this.sockets.add(new TransferSocket(machine, socket));
                 } catch (IOException e) {

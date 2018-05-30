@@ -19,29 +19,47 @@ import java.util.stream.Stream;
  * An {@link Enum} representing the method for
  * invocation for transmitting {@link Command}s
  * other actions between machines between machines.
- *
+ * <p>
  * Machine actions are completed by invoking a {@link Method}.
  *
  * @author nija123098
  */
 public enum MachineAction {
-    /** The action for initiating authentication. */
+    /**
+     * The action for initiating authentication.
+     */
     REQUEST_AUTHENTICATION(TransferSocket.class),// must stay at ordinal 0
-    /** The action for authentication, the response to {@link MachineAction#REQUEST_AUTHENTICATION}. */
+    /**
+     * The action for authentication, the response to {@link MachineAction#REQUEST_AUTHENTICATION}.
+     */
     AUTHENTICATE(TransferSocket.class),// must stay at ordinal 1
-    /** The action to close all connected {@link Machine}s to close the entire network. */
+    /**
+     * The action to close all connected {@link Machine}s to close the entire network.
+     */
     CLOSE_ALL(Machine.class),
-    /** The action to signal that the sender is ready to complete another task. */
+    /**
+     * The action to signal that the sender is ready to complete another task.
+     */
     READY_TO_SERVE(SuperServer.class),
-    /** The action to initiate a code security check for the indicated {@link Repository}. */
+    /**
+     * The action to initiate a code security check for the indicated {@link Repository}.
+     */
     CHECK_REPO(CodeCheckClient.class),
-    /** The action to respond with approval or denial of the {@link Repository} instance's code. */
+    /**
+     * The action to respond with approval or denial of the {@link Repository} instance's code.
+     */
     REPO_CODE_REPORT(SuperServer.class),
-    /** The action to start a game specified by a {@link Match}. */
+    /**
+     * The action to start a game specified by a {@link Match}.
+     */
     RUN_GAME(GameServer.class),
-    /** The action to indicate that one of a requested game's {@link Repository} is out of date. */
+    /**
+     * The action to indicate that one of a requested game's {@link Repository} is out of date.
+     */
     MATCH_OUT_OF_DATE(SuperServer.class),
-    /** The action to respond with a result from a {@link Match}. */
+    /**
+     * The action to respond with a result from a {@link Match}.
+     */
     MATCH_COMPLETE(SuperServer.class),;
 
     /**
@@ -91,7 +109,7 @@ public enum MachineAction {
         if (this.argumentTypes.get().length != args.length) {
             boolean pass = false;
             for (Class<?> clazz : this.argumentTypes.get()) {
-                if (TransferSocket.class.equals(clazz)){
+                if (TransferSocket.class.equals(clazz)) {
                     if (this.argumentTypes.get().length - 1 != args.length)
                         Log.ERROR.log("Invalid argument length for MachineAction " + this);
                     else {
@@ -103,10 +121,11 @@ public enum MachineAction {
             if (!pass) Log.ERROR.log("Invalid argument length for MachineAction " + this);
         }
         for (int i = 0; i < args.length; i++)
-            if (args[i] == null) Log.ERROR.log("Argument found null in write for " + this.name() + " while expecting " + this.argumentTypes.get()[i].getName());
+            if (args[i] == null)
+                Log.ERROR.log("Argument found null in write for " + this.name() + " at " + i + " while expecting " + this.argumentTypes.get()[i].getName());
         for (int i = 0; i < this.argumentTypes.get().length; i++) {
             if (!TransferSocket.class.equals(this.argumentTypes.get()[i]) && !this.argumentTypes.get()[i].isInstance(args[i]))
-                Log.ERROR.log("Invalid argument given for MachineAction " + this + " at " + i + " expected " + this.argumentTypes.get()[i].getSimpleName() + " got " + args[i].getClass().getSimpleName());
+                Log.ERROR.log("Invalid argument given for MachineAction " + this + " at " + i + " expected " + this.argumentTypes.get()[i].getSimpleName() + " got " + args[i].getClass().getSimpleName() + " args: " + Stream.of(args).map(Object::toString).reduce((s, s2) -> s + ", " + s2).orElse("No Args"));
         }
         if (this.argumentTypes.get().length == 0) return new byte[]{(byte) this.ordinal()};
         ByteBuffer bytes = new ByteBuffer();
@@ -186,7 +205,7 @@ public enum MachineAction {
      * Ensures the initialization due to requiring the
      * instance to be initialized for this function.
      */
-    private void ensureMethodLoad(){
+    private void ensureMethodLoad() {
         if (this.argumentTypes.get() != null) return;
         this.method.set(Stream.of(classLocation.getMethods()).filter(m -> {
             Action a = m.getAnnotation(Action.class);

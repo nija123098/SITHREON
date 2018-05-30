@@ -37,6 +37,7 @@ public abstract class Command {
     static {
         registerConversion(String.class, in -> new Pair<>(in, in.length()));
         registerConversion(Integer.class, in -> {
+            in = in.replace("_", "").replace(",", "");
             int index = in.indexOf(' ');
             index = index == -1 ? in.length() : index;
             try {
@@ -50,8 +51,8 @@ public abstract class Command {
             return new Pair<>(Repository.getRepo(arg), arg.length());
         });
         Set<String> trueReps = new HashSet<>(), falseReps = new HashSet<>();
-        Collections.addAll(trueReps, "true", "t", "y", "yes");
-        Collections.addAll(falseReps, "false", "f", "n", "no");
+        Collections.addAll(trueReps, "true", "t", "y", "yes", "1");
+        Collections.addAll(falseReps, "false", "f", "n", "no", "0");
         registerConversion(Boolean.class, in -> {
             String arg = in.toLowerCase().split(" ")[0];
             if (trueReps.contains(arg)) return new Pair<>(true, arg.length());
@@ -111,8 +112,9 @@ public abstract class Command {
         this.method = commandMethods.get(0);
         this.argTypes = this.method.getParameterTypes();
         for (Class<?> c : this.argTypes) {
-            if (!CONVERSION_MAP.containsKey(c) && !DEFAULT_MAP.containsKey(c))
+            if (!CONVERSION_MAP.containsKey(c) && !DEFAULT_MAP.containsKey(c)) {
                 Log.ERROR.log("No registered conversion for String to " + c.getSimpleName() + " in " + this.getClass().getName());
+            }
         }
         CommandHandler.COMMAND_MAP.putCommand(this, name);
     }

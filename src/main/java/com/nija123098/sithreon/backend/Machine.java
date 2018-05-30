@@ -46,9 +46,9 @@ public abstract class Machine {
      */
     protected Machine() {
         KeepAliveUtil.start();
-        if (MACHINE.get() != null)
+        if (MACHINE.get() != null) {
             Log.WARN.log("Launching a second Machine instance in the same program instance, this may cause unexpected issues.");
-        MACHINE.set(this);
+        } else MACHINE.set(this);
     }
 
     /**
@@ -61,6 +61,13 @@ public abstract class Machine {
         this.onClose.forEach(Runnable::run);
         this.closed.set(true);
         KeepAliveUtil.stop();
+    }
+
+    /**
+     * If this instance is closing.
+     */
+    public boolean closing() {
+        return this.closing.get();
     }
 
     /**
@@ -86,10 +93,10 @@ public abstract class Machine {
      * The {@link MachineAction} method for indicating that a {@link MachineAction} is ready to server.
      *
      * @param machineType the self reported {@link ManagedMachineType} reporting to be ready to serve.
-     * @param socket the socket representing the {@link ManagedMachineType} reporting.
+     * @param socket      the socket representing the {@link ManagedMachineType} reporting.
      */
     @Action(MachineAction.READY_TO_SERVE)
-    public void readyToServe(ManagedMachineType machineType, TransferSocket socket){
+    public void readyToServe(ManagedMachineType machineType, TransferSocket socket) {
         this.notifyReady(machineType, socket);
     }
 
@@ -98,9 +105,9 @@ public abstract class Machine {
      * overridden to indicate that the machine can make use of a {@link Machine} reporting to be ready to serve.
      *
      * @param machineType the self reported {@link ManagedMachineType} reporting to be ready to serve.
-     * @param socket the socket representing the {@link ManagedMachineType} reporting.
+     * @param socket      the socket representing the {@link ManagedMachineType} reporting.
      */
-    protected void notifyReady(ManagedMachineType machineType, TransferSocket socket){
+    protected void notifyReady(ManagedMachineType machineType, TransferSocket socket) {
         Log.WARN.log("Managed machine of type " + machineType + " from " + socket.getConnectionName() + " reported ready, closing connection");
         socket.close();
     }

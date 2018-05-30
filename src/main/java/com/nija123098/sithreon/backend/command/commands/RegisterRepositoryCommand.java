@@ -17,7 +17,7 @@ public class RegisterRepositoryCommand extends Command {
      * The command method called during invocation.
      *
      * @param repository the repository to register.
-     * @param machine the current machine.
+     * @param machine    the current machine.
      */
     @CommandMethod
     public void command(Repository repository, Machine machine) {

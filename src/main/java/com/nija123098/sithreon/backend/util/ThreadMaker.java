@@ -24,13 +24,13 @@ public class ThreadMaker {
     /**
      * A utility for making and organizing threads.
      *
-     * @param group the {@link ThreadGroup} the thread should belong to.
-     * @param name the name of the thread to make.
-     * @param daemon if the thread should be a demon thread.
+     * @param group    the {@link ThreadGroup} the thread should belong to.
+     * @param name     the name of the thread to make.
+     * @param daemon   if the thread should be a demon thread.
      * @param runnable the runnable to execute when the thread is started.
      * @return the thread made according to the parameters.
      */
-    public static Thread getThread(ThreadGroup group, String name, boolean daemon, Runnable runnable){
+    public static Thread getThread(ThreadGroup group, String name, boolean daemon, Runnable runnable) {
         Thread thread = new Thread(group, runnable, name);
         thread.setDaemon(daemon);
         return thread;

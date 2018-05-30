@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Anotates a method which will be called for the
+ * Annotates a method which will be called for the
  * {@link Command} class's invocation as a command.
  *
  * @author nija123098

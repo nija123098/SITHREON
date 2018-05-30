@@ -10,10 +10,16 @@ import com.nija123098.sithreon.backend.machines.RunnerClient;
  * to servers for use of indicating being ready to serve.
  */
 public enum ManagedMachineType {
-    /** The representation of {@link CodeCheckClient}. */
+    /**
+     * The representation of {@link CodeCheckClient}.
+     */
     CODE_CHECK,
-    /** The representation of {@link GameServer}. */
+    /**
+     * The representation of {@link GameServer}.
+     */
     GAME_SERVER,
-    /** The representation of {@link RunnerClient}. */
+    /**
+     * The representation of {@link RunnerClient}.
+     */
     GAME_RUNNER,;
 }

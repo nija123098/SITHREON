@@ -32,7 +32,7 @@ public class CommandHandler {
             while (true) {
                 try {
                     args = scanner.nextLine();
-                    COMMAND_MAP.invokeCommand(args, false);
+                    if (!args.trim().isEmpty()) COMMAND_MAP.invokeCommand(args, false);
                 } catch (Exception e) {
                     Log.WARN.log("Caught exception attempting to invoke command: " + args, e);
                 }
@@ -108,11 +108,13 @@ public class CommandHandler {
          */
         private void putCommand(Command command, int nameIndex, String... name) {
             if (name.length == nameIndex) {
-                if (this.command != null)
+                if (this.command != null) {
                     Log.WARN.log("Registering with name " + StringHelper.join(" ", name) + " over command " + this.command.getClass().getName() + " with " + command.getClass().getName());
+                }
                 this.command = command;
-            } else
+            } else {
                 this.computeIfAbsent(name[nameIndex], (n) -> new CommandMap<>()).putCommand(command, ++nameIndex, name);
+            }
         }
 
         /**
