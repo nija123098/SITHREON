@@ -1,7 +1,7 @@
 package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
-import com.nija123098.sithreon.backend.machines.CodeCheckClient;
+import com.nija123098.sithreon.backend.machines.CheckClient;
 import com.nija123098.sithreon.backend.machines.GameServer;
 import com.nija123098.sithreon.backend.machines.RunnerClient;
 
@@ -11,7 +11,7 @@ import com.nija123098.sithreon.backend.machines.RunnerClient;
  */
 public enum ManagedMachineType {
     /**
-     * The representation of {@link CodeCheckClient}.
+     * The representation of {@link CheckClient}.
      */
     CODE_CHECK,
     /**

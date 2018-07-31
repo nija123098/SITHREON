@@ -3,9 +3,9 @@ package com.nija123098.sithreon.backend;
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.objects.Match;
 import com.nija123098.sithreon.backend.objects.MatchUp;
+import com.nija123098.sithreon.backend.objects.PriorityLevel;
 import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.PriorityLevel;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.File;
@@ -131,7 +131,9 @@ public class Database<K, V> extends HashMap<K, V> {
                     }
                 } catch (IOException e) {
                     try {
-                        Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+                        if (Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).filter(file -> !file.delete()).count() != 0) {
+                            Log.ERROR.log("Delete failed for a file in " + dataTimeFile.toAbsolutePath());
+                        }
                     } catch (IOException ex) {
                         Log.ERROR.log("Could not walk deleting uncompleted files", ex);
                     }
@@ -189,7 +191,7 @@ public class Database<K, V> extends HashMap<K, V> {
     @Override
     public V put(K key, V value) {
         DATABASE_CHANGE.set(true);
-        return super.put(key, value);
+        return value == this.def ? super.remove(key) : super.put(key, value);
     }
 
     @Override

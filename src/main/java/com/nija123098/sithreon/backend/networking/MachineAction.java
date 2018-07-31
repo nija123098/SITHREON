@@ -2,7 +2,7 @@ package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.command.Command;
-import com.nija123098.sithreon.backend.machines.CodeCheckClient;
+import com.nija123098.sithreon.backend.machines.CheckClient;
 import com.nija123098.sithreon.backend.machines.GameServer;
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.objects.Match;
@@ -44,7 +44,7 @@ public enum MachineAction {
     /**
      * The action to initiate a code security check for the indicated {@link Repository}.
      */
-    CHECK_REPO(CodeCheckClient.class),
+    CHECK_REPO(CheckClient.class),
     /**
      * The action to respond with approval or denial of the {@link Repository} instance's code.
      */

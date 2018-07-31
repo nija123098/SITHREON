@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  *
  * @author nija123098
  */
-public class ObjectSerialization {
+class ObjectSerialization {
     private static final Map<Class<?>, Function<byte[], ?>> TO_OBJECT = new HashMap<>();
     private static final Map<Class<?>, Function<?, byte[]>> TO_BYTES = new HashMap<>();
 

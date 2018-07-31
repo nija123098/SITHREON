@@ -1,6 +1,7 @@
 package com.nija123098.sithreon.backend;
 
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.throwable.SithreonException;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -9,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -91,6 +93,16 @@ public class Config {
     public static Integer databaseSaveDelay;
 
     /**
+     * The comma separated list of domains or domains to check if dependent connections are up.
+     */
+    public static String standardAccessibleDomains;
+
+    /**
+     * If connection should use secure protocols.
+     */
+    public static Boolean useSecure;
+
+    /**
      * The level to display logs at.
      */
     public static Log logLevel = Log.TRACE;
@@ -99,6 +111,64 @@ public class Config {
      * If the config should be deleted on startup.
      */
     private static Boolean removeConfig = false;
+
+    /**
+     * The function map for converting simple values to
+     */
+    private static final Map<Class<?>, Function<String, ?>> FUNCTION_MAP = new HashMap<>();
+
+    /**
+     * Converts a string to an enum instance given the {@link Class}.
+     *
+     * @param clazz the type of the enum.
+     * @param s     the string representation.
+     * @param <E>   the type of the enum.
+     * @return the enum represented by the string.
+     */
+    private static <E extends Enum<E>> E getEnum(Class<?> clazz, String s) {
+        return Enum.valueOf((Class<E>) clazz, s);
+    }
+
+    /**
+     * Loads all the key value config to the fields in the provided object.
+     *
+     * @param object the object to load to.
+     * @param lines  the lines of the file.
+     */
+    public static void setValues(Object object, List<String> lines) {
+        if (object == null) throw new NullPointerException();
+        Class<?> clazz = object instanceof Class<?> ? (Class<?>) object : object.getClass();
+        lines.stream().map(s -> {
+            int index = s.indexOf('#');
+            return index == -1 ? s : s.substring(0, index);
+        }).forEach(s -> {
+            int index = s.indexOf('=');
+            if (index == -1) return;
+            String configName = s.substring(0, index).trim();
+            try {
+                Field field = clazz.getDeclaredField(configName);
+                Class<?> type = field.getType();
+                try {
+                    Object o;
+                    String value = s.substring(index + 1, s.length()).trim();
+                    if (type.isEnum()) o = getEnum(type, value.toUpperCase().replace(" ", "_"));
+                    else {
+                        Function<String, ?> conversionFunction = FUNCTION_MAP.get(type);
+                        if (conversionFunction == null)
+                            throw new SithreonException("Unable to convert strings to " + type.getName());
+                        o = conversionFunction.apply(value);
+                    }
+                    field.set(object, o);
+                } catch (IllegalAccessException e) {
+                    Log.WARN.log("Unable to assign value to " + field.getName(), e);
+                } catch (Exception e) {
+                    throw new SithreonException("Unable to load config for " + object, e);
+                }
+            } catch (NoSuchFieldException e) {
+                Log.DEBUG.log("Config in " + object + " unused: " + configName);
+            }
+        });
+    }
 
     /**
      * Generates a config with the default values.
@@ -127,30 +197,14 @@ public class Config {
      * Sets the config field values to the values represented in the config file.
      */
     public static void init() {
-        Map<Class<?>, Function<String, ?>> map = new HashMap<>();
-        map.put(String.class, (s) -> s);
-        map.put(Integer.class, Integer::parseInt);
-        map.put(Log.class, Log::valueOf);
-        map.put(Boolean.class, Boolean::valueOf);
+        FUNCTION_MAP.put(String.class, (s) -> s);
+        FUNCTION_MAP.put(Integer.class, Integer::parseInt);
+        FUNCTION_MAP.put(Long.class, Long::valueOf);
+        FUNCTION_MAP.put(Log.class, Log::valueOf);
+        FUNCTION_MAP.put(Boolean.class, Boolean::valueOf);
         try {
-            Files.readAllLines(CONFIG_PATH).forEach(s -> {
-                int index = s.indexOf('=');
-                if (index == -1) Log.ERROR.log("Malformed config file does not include =");
-                String configName = s.substring(0, index);
-                try {
-                    Field field = Config.class.getDeclaredField(configName);
-                    try {
-                        field.set(Config.class, map.get(field.getType()).apply(s.substring(index + 1, s.length())));
-                    } catch (IllegalAccessException e) {
-                        Log.ERROR.log("Malformed config class", e);
-                    } catch (Exception e) {
-                        Log.ERROR.log("Unable to load config likely due to being unable to convert string to " + field.getType().getSimpleName(), e);
-                    }
-                } catch (NoSuchFieldException e) {
-                    Log.DEBUG.log("Config contained unused config: " + configName);
-                }
-            });
-        } catch (IOException e) {
+            setValues(Config.class, Files.readAllLines(CONFIG_PATH));
+        } catch (Exception e) {
             Log.ERROR.log("Unable to read config file", e);
         }
         if (Config.removeConfig) try {

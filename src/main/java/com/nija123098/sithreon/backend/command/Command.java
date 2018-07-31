@@ -4,6 +4,7 @@ import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.FunctionPair;
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.StringHelper;
 import javafx.util.Pair;
 
 import java.lang.reflect.InvocationTargetException;
@@ -37,26 +38,24 @@ public abstract class Command {
     static {
         registerConversion(String.class, in -> new Pair<>(in, in.length()));
         registerConversion(Integer.class, in -> {
-            in = in.replace("_", "").replace(",", "");
-            int index = in.indexOf(' ');
-            index = index == -1 ? in.length() : index;
+            in = StringHelper.endAt(in, " ");
             try {
-                return new Pair<>(Integer.valueOf(in.substring(0, index)), index);
+                return new Pair<>(Integer.valueOf(in.replace("_", "").replace(",", "")), in.length());
             } catch (NumberFormatException e) {
                 return null;
             }
         });
         registerConversion(Repository.class, in -> {
-            String arg = in.split(" ")[0];
-            return new Pair<>(Repository.getRepo(arg), arg.length());
+            in = StringHelper.endAt(in, " ");
+            return new Pair<>(Repository.getRepo(in.endsWith("/") ? in.substring(0, in.length() - 1) : in), in.length());
         });
         Set<String> trueReps = new HashSet<>(), falseReps = new HashSet<>();
         Collections.addAll(trueReps, "true", "t", "y", "yes", "1");
         Collections.addAll(falseReps, "false", "f", "n", "no", "0");
         registerConversion(Boolean.class, in -> {
-            String arg = in.toLowerCase().split(" ")[0];
-            if (trueReps.contains(arg)) return new Pair<>(true, arg.length());
-            if (falseReps.contains(arg)) return new Pair<>(false, arg.length());
+            in = StringHelper.endAt(in, " ");
+            if (trueReps.contains(in)) return new Pair<>(true, in.length());
+            if (falseReps.contains(in)) return new Pair<>(false, in.length());
             return null;
         });
     }
@@ -167,7 +166,7 @@ public abstract class Command {
         try {
             this.method.invoke(this, objectArguments);
         } catch (IllegalAccessException e) {
-            Log.ERROR.log("Malformed command method for " + this.getClass().getName(), e);
+            Log.WARN.log("Malformed command method for " + this.getClass().getName(), e);
         } catch (InvocationTargetException e) {
             (initial ? Log.ERROR : Log.WARN).log("Exception occurred during command invocation: " + this.getClass().getName() + " " + args, e);
         }

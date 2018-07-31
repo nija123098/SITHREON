@@ -26,7 +26,7 @@ public class MachineCommand extends Command {
     public void command(String type) {
         Config.init();
         Log.INFO.log("Starting up machine " + Config.machineId);
-        switch (type) {
+        switch (type.toLowerCase().replace("-", " ").replace("_", " ")) {
             case "super server":
             case "super":
             case "s":
@@ -36,7 +36,7 @@ public class MachineCommand extends Command {
             case "code check":
             case "check":
             case "c":
-                new CodeCheckClient();
+                new CheckClient();
                 break;
             case "game server":
             case "game":

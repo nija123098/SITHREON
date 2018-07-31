@@ -49,7 +49,7 @@ public enum Log {
     /**
      * For info likely not useful in debugging.
      */
-    TRACE(37),;
+    TRACE(36),;
 
     /**
      * The {@link DateFormat} for the log prefix.

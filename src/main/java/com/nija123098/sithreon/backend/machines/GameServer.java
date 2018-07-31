@@ -5,7 +5,8 @@ import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.networking.*;
 import com.nija123098.sithreon.backend.objects.Match;
 import com.nija123098.sithreon.backend.objects.Repository;
-import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.ConnectionHelper;
+import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 
 import java.io.IOException;
 
@@ -23,8 +24,8 @@ public class GameServer extends Machine {
         try {
             this.superServerSocket = new TransferSocket(this, Config.superServerAddress, Config.externalPort);
         } catch (IOException e) {
-            Log.ERROR.log("Unable to establish connection to super server due to IOException", e);
-            throw new RuntimeException();// Won't occur
+            ConnectionHelper.throwConnectionException("Unable to establish connection to super server due to IOException", e);
+            throw new NoReturnException();
         }
         this.superServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_SERVER));
     }

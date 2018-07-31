@@ -1,7 +1,4 @@
-package com.nija123098.sithreon.backend.util;
-
-import com.nija123098.sithreon.backend.objects.Match;
-import com.nija123098.sithreon.backend.objects.Repository;
+package com.nija123098.sithreon.backend.objects;
 
 /**
  * An enum representing priority for use in {@link Match#compareTo(Match)}.

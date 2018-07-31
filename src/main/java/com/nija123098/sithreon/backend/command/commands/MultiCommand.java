@@ -20,7 +20,7 @@ public class MultiCommand extends Command {
      * The method invoked by the command which splits and invokes commands.
      *
      * @param regex if the command should use regex in it's splitting.
-     * @param s     the regex or plain value to use to split commands from one another.
+     * @param s     the regex or plain value to use to split commands from one another, followed by the commands.
      */
     @CommandMethod
     public void command(Boolean regex, String s) {

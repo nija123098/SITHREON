@@ -5,10 +5,10 @@ import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.networking.*;
 import com.nija123098.sithreon.backend.objects.Match;
+import com.nija123098.sithreon.backend.objects.PriorityLevel;
 import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.DualPriorityResourceManager;
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.PriorityLevel;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.util.*;
@@ -34,9 +34,9 @@ public class SuperServer extends Machine {
     private final Set<Repository> approvedRepos = new HashSet<>();
 
     /**
-     * The {@link DualPriorityResourceManager} for managing {@link Repository}s and {@link CodeCheckClient} {@link TransferSocket}s.
+     * The {@link DualPriorityResourceManager} for managing {@link Repository}s and {@link CheckClient} {@link TransferSocket}s.
      * No concern is given over priority of {@link Repository}s, as code checking should be a very quick process.
-     * {@link CodeCheckClient}s are sorted by their priority as reported by their initial connection.
+     * {@link CheckClient}s are sorted by their priority as reported by their initial connection.
      */
     private final DualPriorityResourceManager<Repository, TransferSocket> codeCheckResourceManager = new DualPriorityResourceManager<>(((repository, socket) -> {
         socket.write(MachineAction.CHECK_REPO, repository);
@@ -77,13 +77,15 @@ public class SuperServer extends Machine {
         executorService.scheduleWithFixedDelay(() -> {// checks if the next repo in the que has been updated
             Repository repository = this.checkRepositoryQueue.poll();
             if (repository == null) Log.WARN.log("Repository check queue empty");
-            else {
+            else try {
                 if (repository.isApproved()) this.approvedRepos.add(repository);// should already contain it
-                else if (!this.codeCheckResourceManager.getFirstWaiting().contains(repository) && !repository.isUpToDate()) {
+                else if (!this.codeCheckResourceManager.getFirstWaiting().contains(repository) && !repository.getRepositoryConfig().disabled && !repository.isUpToDate()) {
                     this.invalidateRepo(repository);
                     this.codeCheckResourceManager.giveFirst(repository);
                 }// no action if the repository is up to date but not approved
                 this.checkRepositoryQueue.add(repository);
+            } catch (Throwable t) {
+                Log.WARN.log("Exception checking if repository was up to date: " + repository.toString(), t);
             }
         }, 1, 1, TimeUnit.MINUTES);
         this.runOnClose(executorService::shutdownNow);
@@ -101,7 +103,7 @@ public class SuperServer extends Machine {
     }
 
     /**
-     * Activated at the response of a {@link CodeCheckClient} as to the result of security checks
+     * Activated at the response of a {@link CheckClient} as to the result of security checks
      * to ensure the safety of the repository at the most recent HEAD for the repository.
      *
      * @param repository the repository checked.
