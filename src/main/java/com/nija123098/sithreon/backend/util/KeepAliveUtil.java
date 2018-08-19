@@ -1,7 +1,7 @@
 package com.nija123098.sithreon.backend.util;
 
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A simple utility to keep the program alive.
@@ -9,23 +9,28 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author nija123098
  */
 public class KeepAliveUtil {
-    private static final AtomicInteger LIVE_REQUESTS = new AtomicInteger();
-    private static final AtomicReference<Thread> KEEP_ALIVE_THREAD = new AtomicReference<>();
+    private static final Object LOCK = new Object();
+    private static final Set<Object> LIVING_OBJECTS = ConcurrentHashMap.newKeySet();
 
-    public static void start() {
-        if (LIVE_REQUESTS.getAndIncrement() == 0) {
-            KEEP_ALIVE_THREAD.set(ThreadMaker.getThread(ThreadMaker.BACKEND, "Keep Alive Thread", false, () -> {
-                try {
-                    Thread.sleep(Long.MAX_VALUE);
-                } catch (InterruptedException ignored) {
-                    Log.INFO.log("Closing keep alive thread");
+    public static void start(Object living) {
+        if (LIVING_OBJECTS.isEmpty()) {
+            ThreadMaker.getThread(ThreadMaker.BACKEND, "Keep Alive Thread", false, () -> {
+                synchronized (LOCK) {
+                    try {
+                        LOCK.wait();
+                    } catch (InterruptedException e) {
+                        Log.WARN.log("Unexpected interrupt of Keep Alive Thread", e);
+                    }
                 }
-            }));
-            KEEP_ALIVE_THREAD.get().start();
+            }).start();
         }
+        LIVING_OBJECTS.add(living);
     }
 
-    public static void stop() {
-        if (LIVE_REQUESTS.decrementAndGet() == 0) KEEP_ALIVE_THREAD.getAndSet(null).interrupt();
+    public static void stop(Object dieing) {
+        LIVING_OBJECTS.remove(dieing);
+        if (LIVING_OBJECTS.isEmpty()) synchronized (LOCK) {
+            LOCK.notifyAll();
+        }
     }
 }

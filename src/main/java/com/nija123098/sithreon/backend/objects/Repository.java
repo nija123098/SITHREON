@@ -3,22 +3,19 @@ package com.nija123098.sithreon.backend.objects;
 import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.CheckClient;
-import com.nija123098.sithreon.backend.util.ConnectionHelper;
+import com.nija123098.sithreon.backend.util.ConnectionUtil;
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.StringHelper;
+import com.nija123098.sithreon.backend.util.StringUtil;
 import com.nija123098.sithreon.backend.util.throwable.InvalidRepositoryException;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
-import com.nija123098.sithreon.backend.util.throwable.connection.ConnectionException;
+import com.nija123098.sithreon.backend.util.throwable.connection.GeneralConnectionException;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -37,6 +34,7 @@ public class Repository implements Comparable<Repository> {
      *
      * @param repo the repository to get a instance for.
      * @return the repository or null if the repository is invalid.
+     * @throws InvalidRepositoryException if the repository is invalid.
      */
     public static Repository getRepo(String repo) {
         return CACHE.computeIfAbsent(repo, s -> {
@@ -66,10 +64,10 @@ public class Repository implements Comparable<Repository> {
      * @return if the repository exists.
      */
     public boolean isValid() {
-        try {
-            if (!ConnectionHelper.pageExists(ConnectionHelper.getExternalProtocolName() + "://" + this.repo) || this.getHeadHash() == null)
+        try {// Domains with repositories should be general connections
+            if (!ConnectionUtil.pageExists(ConnectionUtil.getExternalProtocolName() + "://" + this.repo) || this.getHeadHash() == null)
                 return false;// invalid repository
-        } catch (ConnectionException e) {
+        } catch (GeneralConnectionException e) {
             throw e;
         } catch (Exception e) {
             return false;
@@ -84,14 +82,14 @@ public class Repository implements Comparable<Repository> {
         boolean pulling = Files.exists(Paths.get(this.getLocalRepoLocation()));
         try {
             if (!pulling) new File(this.getLocalRepoLocation()).mkdirs();
-            Process process = new ProcessBuilder("git", pulling ? "pull" : "clone", ConnectionHelper.getExternalProtocolName() + "://" + this.repo).directory(new File(this.getLocalRepoLocation())).start();
+            Process process = new ProcessBuilder("git", pulling ? "pull" : "clone", ConnectionUtil.getExternalProtocolName() + "://" + this.repo).directory(new File(this.getLocalRepoLocation())).start();
             if (!process.waitFor(1, TimeUnit.MINUTES)) {
                 process.destroyForcibly();
-                ConnectionHelper.throwConnectionException("Timeout " + (pulling ? "pulling" : "cloning") + " git repository " + this.repo);
+                ConnectionUtil.throwConnectionException("Timeout " + (pulling ? "pulling" : "cloning") + " git repository " + this.repo);
             }
             process.destroyForcibly();
         } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("Unable to complete git " + (pulling ? "pull" : "clone") + this.repo, e);
+            ConnectionUtil.throwConnectionException("Unable to complete git " + (pulling ? "pull" : "clone") + this.repo, e);
         } catch (InterruptedException e) {
             Log.ERROR.log("Unexpected interruption " + (pulling ? "pulling" : "cloning") + " repo " + this.repo, e);
         }
@@ -112,15 +110,9 @@ public class Repository implements Comparable<Repository> {
      * @return the {@link RepositoryConfig} for this repository.
      */
     public RepositoryConfig getRepositoryConfig() {
-        String page = ConnectionHelper.getExternalProtocolName() + "://" + this.repo + "/raw/HEAD/SITHREON.cfg";
-        if (ConnectionHelper.pageExists(page)) return new RepositoryConfig(StringHelper.readRaw(page));
-        this.gitClone();
-        try {
-            return new RepositoryConfig(Files.readAllLines(Paths.get(this.getLocalRepoLocation())));
-        } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("Unknown IOException getting RepositoryConfig for " + this.repo, e);
-            throw new NoReturnException();
-        }
+        String page = ConnectionUtil.getExternalProtocolName() + "://" + this.repo + "/raw/HEAD/config.cfg";
+        if (ConnectionUtil.pageExists(page)) return new RepositoryConfig(StringUtil.readRaw(page));
+        return new RepositoryConfig(Collections.emptyList());
     }
 
     /**
@@ -131,22 +123,22 @@ public class Repository implements Comparable<Repository> {
     public String getHeadHash() {
         Process process;
         try {
-            process = new ProcessBuilder("git", "ls-remote", ConnectionHelper.getExternalProtocolName() + "://" + this.repo, "HEAD").start();
+            process = new ProcessBuilder("git", "ls-remote", ConnectionUtil.getExternalProtocolName() + "://" + this.repo, "HEAD").start();
         } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("Unable to connect to git repository", e);
+            ConnectionUtil.throwConnectionException("Unable to connect to git repository", e);
             throw new NoReturnException();
         }
         try {
             process.waitFor(15, TimeUnit.SECONDS);
             if (process.exitValue() != 0)
-                ConnectionHelper.throwConnectionException("Unable to connect to git repository " + this.repo);
+                ConnectionUtil.throwConnectionException("Unable to connect to git repository " + this.repo);
             byte[] bytes = new byte[40];// SHA-1 length of hex
             if (process.getInputStream().read(bytes) != 40)
                 throw new IOException("Could not read all hash bytes of " + this.repo + ".  Received " + Arrays.toString(bytes));
             process.destroy();// shouldn't be necessary
-            return new String(bytes, Charset.forName("UTF-8"));
+            return new String(bytes, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("IOException connecting to git repository", e);
+            ConnectionUtil.throwConnectionException("IOException connecting to git repository", e);
             throw new NoReturnException();
         } catch (InterruptedException e) {
             if (!Machine.MACHINE.get().closing())
@@ -166,9 +158,9 @@ public class Repository implements Comparable<Repository> {
     }
 
     /**
-     * Returns if the current hash is
+     * Returns if the current hash is the one most recently checked.
      *
-     * @return if the
+     * @return if the current hash is the one most recently checked.
      */
     public boolean isUpToDate() {
         return this.getLastCheckedHeadHash() != null && Objects.equals(this.getLastCheckedHeadHash(), this.getHeadHash());

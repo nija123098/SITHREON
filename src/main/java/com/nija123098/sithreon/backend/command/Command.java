@@ -1,14 +1,22 @@
 package com.nija123098.sithreon.backend.command;
 
+import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Machine;
+import com.nija123098.sithreon.backend.networking.Certificate;
 import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.FunctionPair;
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.StringHelper;
+import com.nija123098.sithreon.backend.util.StringUtil;
 import javafx.util.Pair;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -38,7 +46,7 @@ public abstract class Command {
     static {
         registerConversion(String.class, in -> new Pair<>(in, in.length()));
         registerConversion(Integer.class, in -> {
-            in = StringHelper.endAt(in, " ");
+            in = StringUtil.endAt(in, " ");
             try {
                 return new Pair<>(Integer.valueOf(in.replace("_", "").replace(",", "")), in.length());
             } catch (NumberFormatException e) {
@@ -46,18 +54,43 @@ public abstract class Command {
             }
         });
         registerConversion(Repository.class, in -> {
-            in = StringHelper.endAt(in, " ");
+            in = StringUtil.endAt(in, " ");
             return new Pair<>(Repository.getRepo(in.endsWith("/") ? in.substring(0, in.length() - 1) : in), in.length());
         });
         Set<String> trueReps = new HashSet<>(), falseReps = new HashSet<>();
         Collections.addAll(trueReps, "true", "t", "y", "yes", "1");
         Collections.addAll(falseReps, "false", "f", "n", "no", "0");
         registerConversion(Boolean.class, in -> {
-            in = StringHelper.endAt(in, " ");
+            in = StringUtil.endAt(in, " ");
             if (trueReps.contains(in)) return new Pair<>(true, in.length());
             if (falseReps.contains(in)) return new Pair<>(false, in.length());
             return null;
         });
+        registerConversion(Long.class, in -> {
+            in = StringUtil.endAt(in, " ");
+            return new Pair<>(Long.parseLong(in), in.length());
+        });
+        registerConversion(byte[].class, in -> {
+            in = StringUtil.endAt(in, " ");
+            return new Pair<>(Base64.getMimeDecoder().decode(in), in.length());
+        });
+        registerConversion(PrivateKey.class, in -> {
+            in = StringUtil.endAt(in, " ");
+            try {
+                return new Pair<>(KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                return null;
+            }
+        });
+        registerConversion(PublicKey.class, in -> {
+            in = StringUtil.endAt(in, " ");
+            try {
+                return new Pair<>(KeyFactory.getInstance("RSA").generatePublic(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                return null;
+            }
+        });
+
     }
 
     /**
@@ -74,6 +107,10 @@ public abstract class Command {
     static {
         registerDefault(Machine.class, Machine.MACHINE::get);
         registerDefault(Boolean.class, () -> false);
+        registerDefault(Certificate.class, () -> Certificate.getCertificate(Config.selfCertificateSerial));
+        registerDefault(PrivateKey.class, () -> Config.privateKey);
+        registerDefault(PublicKey.class, () -> Certificate.getCertificate(Config.selfCertificateSerial).getPublicKey());
+        registerDefault(Scanner.class, () -> CommandHandler.SCANNER);
     }
 
     /**

@@ -7,7 +7,7 @@ import com.nija123098.sithreon.backend.machines.GameServer;
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.objects.Match;
 import com.nija123098.sithreon.backend.objects.Repository;
-import com.nija123098.sithreon.backend.util.ByteBuffer;
+import com.nija123098.sithreon.backend.util.ByteHandler;
 import com.nija123098.sithreon.backend.util.Log;
 
 import java.lang.reflect.InvocationTargetException;
@@ -26,41 +26,65 @@ import java.util.stream.Stream;
  */
 public enum MachineAction {
     /**
+     * Affirms a policy of no authentication between machine connections.
+     */
+    AFFIRM_NO_AUTHENTICATION(TransferSocket.class, false),
+    /**
+     * Requests a certificate.
+     */
+    REQUEST_CERTIFICATE(TransferSocket.class, false),
+    /**
+     * Sends a certificate to another {@link Machine}.
+     */
+    SEND_CERTIFICATE(TransferSocket.class, false),
+    /**
+     * Identifies this machine as the holder of the {@link java.security.PrivateKey} of the sent certificate.
+     * <p>
+     * This is later authenticated.
+     */
+    IDENTIFY_SELF(TransferSocket.class, false),
+    /**
      * The action for initiating authentication.
      */
-    REQUEST_AUTHENTICATION(TransferSocket.class),// must stay at ordinal 0
+    REQUEST_AUTHENTICATION(TransferSocket.class, false),
     /**
      * The action for authentication, the response to {@link MachineAction#REQUEST_AUTHENTICATION}.
      */
-    AUTHENTICATE(TransferSocket.class),// must stay at ordinal 1
+    AUTHENTICATE(TransferSocket.class, false),// must stay at ordinal 1
     /**
      * The action to close all connected {@link Machine}s to close the entire network.
      */
-    CLOSE_ALL(Machine.class),
+    CLOSE_ALL(Machine.class, true),
     /**
      * The action to signal that the sender is ready to complete another task.
      */
-    READY_TO_SERVE(SuperServer.class),
+    READY_TO_SERVE(SuperServer.class, true),
     /**
      * The action to initiate a code security check for the indicated {@link Repository}.
      */
-    CHECK_REPO(CheckClient.class),
+    CHECK_REPO(CheckClient.class, true),
     /**
      * The action to respond with approval or denial of the {@link Repository} instance's code.
      */
-    REPO_CODE_REPORT(SuperServer.class),
+    REPO_CODE_REPORT(SuperServer.class, true),
     /**
      * The action to start a game specified by a {@link Match}.
      */
-    RUN_GAME(GameServer.class),
+    RUN_GAME(GameServer.class, true),
     /**
      * The action to indicate that one of a requested game's {@link Repository} is out of date.
      */
-    MATCH_OUT_OF_DATE(SuperServer.class),
+    MATCH_OUT_OF_DATE(SuperServer.class, true),
     /**
      * The action to respond with a result from a {@link Match}.
      */
-    MATCH_COMPLETE(SuperServer.class),;
+    MATCH_COMPLETE(SuperServer.class, true),
+    ;
+
+    /**
+     * If the machine needs to verify itself before it can use this action or not.
+     */
+    private final boolean requiresVerification;
 
     /**
      * The location to find the action's method.
@@ -89,7 +113,8 @@ public enum MachineAction {
      * @param classLocation the {@link Class} type which the method
      *                      for this action is contained in.
      */
-    MachineAction(Class<?> classLocation) {
+    MachineAction(Class<?> classLocation, boolean requiresVerification) {
+        this.requiresVerification = requiresVerification;
         this.classLocation = classLocation;
         this.machineAction = Machine.class.isAssignableFrom(classLocation);
     }
@@ -128,7 +153,7 @@ public enum MachineAction {
                 Log.ERROR.log("Invalid argument given for MachineAction " + this + " at " + i + " expected " + this.argumentTypes.get()[i].getSimpleName() + " got " + args[i].getClass().getSimpleName() + " args: " + Stream.of(args).map(Object::toString).reduce((s, s2) -> s + ", " + s2).orElse("No Args"));
         }
         if (this.argumentTypes.get().length == 0) return new byte[]{(byte) this.ordinal()};
-        ByteBuffer bytes = new ByteBuffer();
+        ByteHandler bytes = new ByteHandler();
         bytes.add((byte) this.ordinal());
         byte[] serialized;
         for (int i = 0; i < this.argumentTypes.get().length; i++) {
@@ -144,14 +169,14 @@ public enum MachineAction {
      * Deserializes the bytes sent to this {@link Machine}
      * for invocation of the appropriate method.
      * <p>
-     * The {@link ByteBuffer} will have the appropriate number of bytes
+     * The {@link ByteHandler} will have the appropriate number of bytes
      * removed from it in the case that objects are found for deserialization.
      *
      * @param bytes the byte buffer to draw bytes from.
      * @return the objects to invoke on the appropriate method or null.
      * if the objects that should be specified are not completely within the buffer.
      */
-    public Object[] read(TransferSocket socket, ByteBuffer bytes) {
+    public Object[] read(TransferSocket socket, ByteHandler bytes) {
         this.ensureMethodLoad();
         if (this.argumentTypes.get().length == 0) return new Object[0];
         Object[] objects = new Object[this.argumentTypes.get().length];
@@ -207,11 +232,20 @@ public enum MachineAction {
      */
     private void ensureMethodLoad() {
         if (this.argumentTypes.get() != null) return;
-        this.method.set(Stream.of(classLocation.getMethods()).filter(m -> {
+        this.method.set(Stream.of(this.classLocation.getMethods()).filter(m -> {
             Action a = m.getAnnotation(Action.class);
             return a != null && a.value() == this;
         }).findFirst().orElse(null));
         if (this.method.get() == null) Log.ERROR.log("No method found for MachineAction " + this);
         this.argumentTypes.set((Class<Object>[]) this.method.get().getParameterTypes());
+    }
+
+    /**
+     * If processing this action requires authentication.
+     *
+     * @return if processing this action requires authentication.
+     */
+    public boolean requiresAuthentication() {
+        return this.requiresVerification;
     }
 }

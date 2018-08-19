@@ -4,9 +4,13 @@ import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.objects.Match;
 import com.nija123098.sithreon.backend.objects.MatchUp;
 import com.nija123098.sithreon.backend.objects.Repository;
+import com.nija123098.sithreon.backend.util.ByteHandler;
 
+import java.lang.reflect.Array;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
@@ -18,17 +22,29 @@ import java.util.regex.Pattern;
  *
  * @author nija123098
  */
-class ObjectSerialization {
+public class ObjectSerialization {
+    /**
+     * Function for turning an enum to bytes, since in line ths doesn't seem to work.
+     */
+    private static final Function<Object, byte[]> ENUM_TO_BYTE = o -> new byte[]{(byte) ((Enum) o).ordinal()};
+
+    /**
+     * Map of deserialization functions.
+     */
     private static final Map<Class<?>, Function<byte[], ?>> TO_OBJECT = new HashMap<>();
+
+    /**
+     * Map of serialization functions.
+     */
     private static final Map<Class<?>, Function<?, byte[]>> TO_BYTES = new HashMap<>();
 
     static {
         registerSerialization(Long.class, (aLong -> ByteBuffer.allocate(Long.BYTES).putLong(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Long.BYTES).put(bytes).flip()).asLongBuffer().get()));
         registerSerialization(Integer.class, (aLong -> ByteBuffer.allocate(Integer.BYTES).putInt(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Integer.BYTES).put(bytes).flip()).asIntBuffer().get()));
-        registerSerialization(String.class, s -> s.getBytes(Charset.forName("UTF-8")), bytes -> new String(bytes, Charset.forName("UTF-8")));
+        registerSerialization(String.class, s -> s.getBytes(StandardCharsets.UTF_8), bytes -> new String(bytes, Charset.forName("UTF-8")));
         registerSerialization(Repository.class, repository -> serialize(String.class, repository.toString()), bytes -> Repository.getRepo(deserialize(String.class, bytes)));
         registerSerialization(Boolean.class, bool -> new byte[]{bool ? ((byte) 1) : 0}, bytes -> bytes[0] == 1);
-        registerSerialization(byte[].class, bytes -> bytes, bytes -> bytes);
+        registerSerialization(byte[].class, Function.identity(), Function.identity());
         registerSerialization(MatchUp.class, matchUp -> serialize(String.class, matchUp.toString()), bytes -> {
             String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
             return new MatchUp(Repository.getRepo(split[0]), Repository.getRepo(split[1]));
@@ -37,6 +53,8 @@ class ObjectSerialization {
             String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
             return new Match(Repository.getRepo(split[0]), Repository.getRepo(split[1]), split[2], split[3], Long.parseLong(split[4]));
         });
+        registerSerialization(Certificate.class, Certificate::getBytes, Certificate::getCertificate);
+        registerSerialization(BigInteger.class, BigInteger::toByteArray, BigInteger::new);
     }
 
     /**
@@ -62,7 +80,21 @@ class ObjectSerialization {
      */
     public static <E> byte[] serialize(Class<E> type, E object) {
         if (type.isEnum()) return new byte[]{(byte) ((Enum) object).ordinal()};
-        return ((Function<E, byte[]>) TO_BYTES.get(type)).apply(object);
+        Function<E, byte[]> function = (Function<E, byte[]>) TO_BYTES.get(type);
+        if (type.isArray() && function == null) {
+            ByteHandler byteHandler = new ByteHandler();
+            Function<Integer, byte[]> integerFunction = (Function<Integer, byte[]>) TO_BYTES.get(Integer.class);
+            int length = Array.getLength(object);
+            byteHandler.add(integerFunction.apply(length));
+            function = (Function<E, byte[]>) (type.getComponentType().isEnum() ? ENUM_TO_BYTE : TO_BYTES.get(type.getComponentType()));
+            byte[] serialized;
+            for (int i = 0; i < length; i++) {
+                serialized = function.apply((E) Array.get(object, i));
+                byteHandler.add(integerFunction.apply(serialized.length));
+                byteHandler.add(serialized);
+            }
+            return byteHandler.getBytes();
+        } else return ((Function<E, byte[]>) TO_BYTES.get(type)).apply(object);
     }
 
     /**
@@ -75,6 +107,17 @@ class ObjectSerialization {
      */
     public static <E> E deserialize(Class<E> type, byte[] bytes) {
         if (type.isEnum()) return type.getEnumConstants()[bytes[0]];
-        return ((Function<byte[], E>) TO_OBJECT.get(type)).apply(bytes);
+        Function<byte[], E> function = (Function<byte[], E>) TO_OBJECT.get(type);
+        if (type.isArray() && function == null) {
+            ByteHandler byteHandler = new ByteHandler(bytes);
+            Function<byte[], Integer> integerFunction = (Function<byte[], Integer>) TO_OBJECT.get(Integer.class);
+            int length = integerFunction.apply(byteHandler.getBytes(true, Integer.BYTES));
+            Object array = Array.newInstance(type.getComponentType(), length);
+            function = type.getComponentType().isEnum() ? b -> (E) type.getComponentType().getEnumConstants()[b[0]] : (Function<byte[], E>) TO_OBJECT.get(type.getComponentType());
+            for (int i = 0; i < length; i++) {
+                Array.set(array, i, function.apply(byteHandler.getBytes(true, integerFunction.apply(byteHandler.getBytes(true, Integer.BYTES)))));
+            }
+            return (E) array;
+        } else return ((Function<byte[], E>) TO_OBJECT.get(type)).apply(bytes);
     }
 }

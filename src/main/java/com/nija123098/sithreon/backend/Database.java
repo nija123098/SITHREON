@@ -10,7 +10,7 @@ import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -106,7 +106,7 @@ public class Database<K, V> extends HashMap<K, V> {
             for (Database database : DATABASES) {
                 if (!Files.exists(database.getPath(aLong))) continue;
                 try {
-                    database.loadData(Files.readAllLines(database.getPath(aLong), Charset.forName("UTF-8")));
+                    database.loadData(Files.readAllLines(database.getPath(aLong), StandardCharsets.UTF_8));
                 } catch (IOException e) {
                     Log.ERROR.log("Could not read database", e);
                 }
@@ -127,11 +127,11 @@ public class Database<K, V> extends HashMap<K, V> {
                 try {
                     List<String> saveData = database.getSaveData();
                     if (!saveData.isEmpty()) {
-                        Files.write(database.getPath(time), saveData, Charset.forName("UTF-8"), StandardOpenOption.CREATE);
+                        Files.write(database.getPath(time), saveData, StandardCharsets.UTF_8, StandardOpenOption.CREATE);
                     }
                 } catch (IOException e) {
                     try {
-                        if (Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).filter(file -> !file.delete()).count() != 0) {
+                        if (Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).anyMatch(file -> !file.delete())) {
                             Log.ERROR.log("Delete failed for a file in " + dataTimeFile.toAbsolutePath());
                         }
                     } catch (IOException ex) {
@@ -227,7 +227,11 @@ public class Database<K, V> extends HashMap<K, V> {
         this.clear();
         for (String s : data) {
             int index = s.indexOf('=');
-            this.put((K) FROM_STRING_MAP.get(this.keyType).apply(s.substring(0, index)), (V) FROM_STRING_MAP.get(this.valueType).apply(s.substring(index + 1, s.length())));
+            try {
+                this.put((K) FROM_STRING_MAP.get(this.keyType).apply(s.substring(0, index)), (V) FROM_STRING_MAP.get(this.valueType).apply(s.substring(index + 1)));
+            } catch (Exception e) {
+                Log.WARN.log("Exception loading database value for line \"" + s + "\"", e);
+            }
         }
     }
 }

@@ -7,7 +7,7 @@ import com.nija123098.sithreon.backend.networking.MachineAction;
 import com.nija123098.sithreon.backend.networking.ManagedMachineType;
 import com.nija123098.sithreon.backend.networking.TransferSocket;
 import com.nija123098.sithreon.backend.objects.Repository;
-import com.nija123098.sithreon.backend.util.ConnectionHelper;
+import com.nija123098.sithreon.backend.util.ConnectionUtil;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 
 import java.io.IOException;
@@ -26,7 +26,7 @@ public class CheckClient extends Machine {
         try {
             this.superServerSocket = new TransferSocket(this, Config.superServerAddress, Config.externalPort);
         } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("Unable to establish connection to super server due to IOException", e);
+            ConnectionUtil.throwConnectionException("Unable to establish connection to super server due to IOException", e);
             throw new NoReturnException();
         }
         this.superServerSocket.registerAuthenticationAction((socket) -> socket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.CODE_CHECK));

@@ -24,7 +24,6 @@ public class MachineCommand extends Command {
      */
     @CommandMethod
     public void command(String type) {
-        Config.init();
         Log.INFO.log("Starting up machine " + Config.machineId);
         switch (type.toLowerCase().replace("-", " ").replace("_", " ")) {
             case "super server":

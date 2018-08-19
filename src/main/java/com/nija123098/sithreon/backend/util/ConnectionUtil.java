@@ -6,7 +6,6 @@ import com.nija123098.sithreon.backend.util.throwable.connection.ConnectionExcep
 import com.nija123098.sithreon.backend.util.throwable.connection.GeneralConnectionException;
 import com.nija123098.sithreon.backend.util.throwable.connection.SpecificConnectionException;
 
-import javax.net.ssl.HttpsURLConnection;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
@@ -17,7 +16,7 @@ import java.util.stream.Stream;
 /**
  * A general helper utility for connections.
  */
-public class ConnectionHelper {
+public class ConnectionUtil {
 
     /**
      * Check if the program has a connection to common servers.
@@ -73,14 +72,13 @@ public class ConnectionHelper {
      * @throws ConnectionException when no general connection exists.
      */
     public static boolean pageExists(String page) {
-        HttpsURLConnection.setDefaultHostnameVerifier((s, sslSession) -> s.equals("127.0.0.1"));
         try {
             boolean pageExists = ((HttpURLConnection) new URL(page).openConnection()).getResponseCode() == HttpURLConnection.HTTP_OK;
             if (!pageExists && !hasGeneralConnection())
                 throw new GeneralConnectionException("Unable to connect generally");
             return pageExists;
         } catch (IOException e) {
-            ConnectionHelper.throwConnectionException("Exception checking if page exists: " + page, e);
+            ConnectionUtil.throwConnectionException("Exception checking if page exists: " + page, e);
             throw new NoReturnException();
         }
     }

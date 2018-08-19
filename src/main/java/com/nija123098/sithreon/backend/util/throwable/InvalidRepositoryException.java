@@ -4,7 +4,7 @@ public class InvalidRepositoryException extends SithreonException {
     /**
      * The repository that is invalid.
      */
-    private String repository;
+    private final String repository;
 
     /**
      * Builds an exception for invalid repository.

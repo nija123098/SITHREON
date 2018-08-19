@@ -21,5 +21,6 @@ public enum ManagedMachineType {
     /**
      * The representation of {@link RunnerClient}.
      */
-    GAME_RUNNER,;
+    GAME_RUNNER,
+    ;
 }

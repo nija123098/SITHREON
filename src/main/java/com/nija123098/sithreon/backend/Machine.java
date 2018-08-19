@@ -45,7 +45,7 @@ public abstract class Machine {
      * Constructs a machine with a keep alive thread.
      */
     protected Machine() {
-        KeepAliveUtil.start();
+        KeepAliveUtil.start(this);
         if (MACHINE.get() != null) {
             Log.WARN.log("Launching a second Machine instance in the same program instance, this may cause unexpected issues.");
         } else MACHINE.set(this);
@@ -60,7 +60,7 @@ public abstract class Machine {
         this.closing.set(true);
         this.onClose.forEach(Runnable::run);
         this.closed.set(true);
-        KeepAliveUtil.stop();
+        KeepAliveUtil.stop(this);
     }
 
     /**

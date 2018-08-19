@@ -73,7 +73,7 @@ public class SuperServer extends Machine {
         Database.init();
         this.checkRepositoryQueue.addAll(Database.REGISTERED_REPOS.keySet());
         new SocketAcceptor(this, Config.externalPort);
-        ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(1, r -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Update Checker", true, r));
+        ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(1, r -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Repository Update Checker", true, r));
         executorService.scheduleWithFixedDelay(() -> {// checks if the next repo in the que has been updated
             Repository repository = this.checkRepositoryQueue.poll();
             if (repository == null) Log.WARN.log("Repository check queue empty");

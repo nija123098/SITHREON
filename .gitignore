@@ -2,7 +2,9 @@
 target/
 data/
 log/
+repos/
 *.iml
 *.cfg
 *.log
+*.jks
 dependency-reduced-pom.xml

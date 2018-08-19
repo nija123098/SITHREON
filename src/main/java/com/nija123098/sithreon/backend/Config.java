@@ -1,18 +1,30 @@
 package com.nija123098.sithreon.backend;
 
+import com.nija123098.sithreon.backend.networking.MachineAction;
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonException;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -25,37 +37,43 @@ public class Config {
     /**
      * The {@link Path} where the config exists.
      */
-    private static final Path CONFIG_PATH = Paths.get("config.cfg");
+    public static final Path CONFIG_PATH = Paths.get("config.cfg");
+
+    // AUTHENTICATION
 
     /**
-     * The algorithm for end to end encryption.
+     * The Object Identifier to represent {@link MachineAction} permissions.
      */
-    public static String encryptionAlgorithm;
+    public static String certificatePermissionOID;
 
     /**
-     * The key for end to end encryption.
+     * Enables authentication using asymmetric cryptography and certificates.
      */
-    public static String encryptionKey;
+    public static Boolean authenticateMachines;
 
     /**
-     * The number of rounds for encryption.
+     * The private key for this {@link Machine}.
      */
-    public static Integer encryptionRounds;
+    public static PrivateKey privateKey;
 
     /**
-     * The key for verification of a client.
+     * The serial number of the certificate representing this machine.
      */
-    public static String authenticationKey;
+    public static BigInteger selfCertificateSerial;
 
     /**
-     * The hashing algorithm to use.
+     * The key store location to use for storing SITHREON related certificates.
+     * <p>
+     * Do not combine with other key stores for different purposes.
      */
-    public static String hashingAlgorithm;
+    public static File trustedCertificateStorage = new File("KeyStore.jks");
 
     /**
-     * The number of rounds a hash should be done for authentication.
+     * The password for the key store.
      */
-    public static Integer hashingRounds;
+    public static char[] keyStorePassword = new char[0];
+
+    // NETWORKING
 
     /**
      * The address of the super server.
@@ -76,6 +94,8 @@ public class Config {
      * The port to communicate internally on.
      */
     public static Integer internalPort;
+
+    // MISCELLANEOUS
 
     /**
      * The unique id of the machine.
@@ -146,11 +166,11 @@ public class Config {
             if (index == -1) return;
             String configName = s.substring(0, index).trim();
             try {
-                Field field = clazz.getDeclaredField(configName);
+                Field field = clazz.getField(configName);
                 Class<?> type = field.getType();
                 try {
                     Object o;
-                    String value = s.substring(index + 1, s.length()).trim();
+                    String value = s.substring(index + 1).trim();
                     if (type.isEnum()) o = getEnum(type, value.toUpperCase().replace(" ", "_"));
                     else {
                         Function<String, ?> conversionFunction = FUNCTION_MAP.get(type);
@@ -162,7 +182,7 @@ public class Config {
                 } catch (IllegalAccessException e) {
                     Log.WARN.log("Unable to assign value to " + field.getName(), e);
                 } catch (Exception e) {
-                    throw new SithreonException("Unable to load config for " + object, e);
+                    throw new SithreonException("Unable to load config for " + object + " due to line " + s, e);
                 }
             } catch (NoSuchFieldException e) {
                 Log.DEBUG.log("Config in " + object + " unused: " + configName);
@@ -193,15 +213,38 @@ public class Config {
         }
     }
 
-    /**
-     * Sets the config field values to the values represented in the config file.
-     */
-    public static void init() {
+    public static <E> Function<String, E> getFunction(Class<E> type) {
+        return (Function<String, E>) FUNCTION_MAP.get(type);
+    }
+
+    static {
         FUNCTION_MAP.put(String.class, (s) -> s);
         FUNCTION_MAP.put(Integer.class, Integer::parseInt);
         FUNCTION_MAP.put(Long.class, Long::valueOf);
         FUNCTION_MAP.put(Log.class, Log::valueOf);
         FUNCTION_MAP.put(Boolean.class, Boolean::valueOf);
+        FUNCTION_MAP.put(byte[].class, s -> Base64.getMimeDecoder().decode(s));
+        FUNCTION_MAP.put(char[].class, String::toCharArray);
+        FUNCTION_MAP.put(File.class, File::new);
+        FUNCTION_MAP.put(Path.class, Paths::get);
+        FUNCTION_MAP.put(BigInteger.class, s -> new BigInteger(Base64.getMimeDecoder().decode(s)));
+        FUNCTION_MAP.put(PrivateKey.class, s -> {
+            try {
+                return KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(s)));
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                Log.ERROR.log("Invalid security settings");
+                throw new NoReturnException();
+            }
+        });
+        FUNCTION_MAP.put(PublicKey.class, s -> {
+            try {
+                return KeyFactory.getInstance("RSA").generatePublic(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(s)));
+            } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
+                Log.ERROR.log("Invalid security settings");
+                throw new NoReturnException();
+            }
+        });
+        FUNCTION_MAP.put(MachineAction[].class, s -> Stream.of(s.split(Pattern.quote(","))).map(MachineAction::valueOf).toArray(MachineAction[]::new));
         try {
             setValues(Config.class, Files.readAllLines(CONFIG_PATH));
         } catch (Exception e) {

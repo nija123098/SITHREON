@@ -31,5 +31,6 @@ public enum PriorityLevel {
     /**
      * The lowest priority for specially unimportant {@link Repository} instances.
      */
-    ULTRA_LOW,;
+    ULTRA_LOW,
+    ;
 }

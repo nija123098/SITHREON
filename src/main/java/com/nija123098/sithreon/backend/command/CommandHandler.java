@@ -1,12 +1,13 @@
 package com.nija123098.sithreon.backend.command;
 
 import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.StringHelper;
+import com.nija123098.sithreon.backend.util.StringUtil;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 import io.github.lukehutch.fastclasspathscanner.FastClasspathScanner;
 import io.github.lukehutch.fastclasspathscanner.scanner.ScanResult;
 import org.apache.commons.lang3.StringUtils;
 
+import java.io.BufferedInputStream;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.Scanner;
@@ -25,20 +26,10 @@ public class CommandHandler {
      */
     static final CommandMap COMMAND_MAP = new CommandMap<>();
 
-    static {
-        ThreadMaker.getThread(ThreadMaker.BACKEND, "Command Handler Reader", true, () -> {
-            Scanner scanner = new Scanner(System.in);
-            String args = null;
-            while (true) {
-                try {
-                    args = scanner.nextLine();
-                    if (!args.trim().isEmpty()) COMMAND_MAP.invokeCommand(args, false);
-                } catch (Exception e) {
-                    Log.WARN.log("Caught exception attempting to invoke command: " + args, e);
-                }
-            }
-        }).start();
-    }
+    /**
+     * The scanner for command processing, which needs to be used in commands with extended input.
+     */
+    static final Scanner SCANNER = new Scanner(new BufferedInputStream(System.in));
 
     /**
      * Initializes the command handler.
@@ -47,7 +38,7 @@ public class CommandHandler {
      */
     public static void init(String[] args) {
         ScanResult results = new FastClasspathScanner("com.nija123098.sithreon.backend.command.commands").matchSubclassesOf(Command.class, cls -> {
-        }).scan();
+        }).scan();// Get all command classes and register them
         try {
             results.classNamesToClassRefs(results.getNamesOfAllClasses()).stream().filter(aClass -> !Modifier.isAbstract(aClass.getModifiers())).forEach(clazz -> {
                 try {
@@ -61,12 +52,24 @@ public class CommandHandler {
         } catch (Exception e) {
             Log.ERROR.log("Exception loading native commands", e);
         }
-        String joined = StringUtils.join(args, " ");
+        String joined = StringUtils.join(args, " ");// Join main lines
         try {
             COMMAND_MAP.invokeCommand(joined, true);
         } catch (Exception e) {
             Log.ERROR.log("Exception running startup command: " + joined, e);
         }
+        // Start handler thread
+        ThreadMaker.getThread(ThreadMaker.BACKEND, "Command Handler Reader", true, () -> {
+            String arg = null;
+            while (true) {
+                try {
+                    arg = SCANNER.nextLine();
+                    if (!arg.trim().isEmpty()) COMMAND_MAP.invokeCommand(arg, false);
+                } catch (Exception e) {
+                    Log.WARN.log("Caught exception attempting to invoke command: " + arg, e);
+                }
+            }
+        }).start();
     }
 
     /**
@@ -109,7 +112,7 @@ public class CommandHandler {
         private void putCommand(Command command, int nameIndex, String... name) {
             if (name.length == nameIndex) {
                 if (this.command != null) {
-                    Log.WARN.log("Registering with name " + StringHelper.join(" ", name) + " over command " + this.command.getClass().getName() + " with " + command.getClass().getName());
+                    Log.WARN.log("Registering with name " + StringUtil.join(" ", name) + " over command " + this.command.getClass().getName() + " with " + command.getClass().getName());
                 }
                 this.command = command;
             } else {
@@ -125,7 +128,7 @@ public class CommandHandler {
          */
         private void invokeCommand(String args, boolean fatal) {
             args = args.trim();
-            String[] split = StringHelper.removeRepeats(args, ' ').split(" ");
+            String[] split = StringUtil.removeRepeats(args, ' ').split(" ");
             Command command = null;
             CommandMap<E> map = this;
             int nameLength = 0;
