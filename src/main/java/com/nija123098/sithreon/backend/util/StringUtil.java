@@ -1,14 +1,17 @@
 package com.nija123098.sithreon.backend.util;
 
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
+import com.nija123098.sithreon.backend.util.throwable.SithreonSecurityException;
 import jdk.nashorn.api.scripting.URLReader;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -62,7 +65,7 @@ public class StringUtil {
         try {
             BufferedReader reader = new BufferedReader(new URLReader(new URL(url)));
             String content;
-            List<String> lines = new ArrayList<>();
+            List<String> lines = new LinkedList<>();
             while ((content = reader.readLine()) != null) lines.add(content);
             return lines;
         } catch (IOException e) {
@@ -91,5 +94,25 @@ public class StringUtil {
      */
     public static String base64EncodeOneLine(byte[] bytes) {
         return new String(Base64.getMimeEncoder(Integer.MAX_VALUE, new byte[0]).encode(bytes), StandardCharsets.UTF_8);
+    }
+
+    private static final MessageDigest MESSAGE_DIGEST;
+
+    static {
+        try {
+            MESSAGE_DIGEST = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new SithreonSecurityException("No SHA-256 implementation found", e);
+        }
+    }
+
+    /**
+     * Hashes a string's content by SHA-256 and returns the Base 64 for it.
+     *
+     * @param input the string to hash.
+     * @return the SHA-256 of the hash in base 64.
+     */
+    public static String getSha256Hash(String input) {
+        return base64EncodeOneLine(MESSAGE_DIGEST.digest(input.getBytes(StandardCharsets.UTF_8)));
     }
 }

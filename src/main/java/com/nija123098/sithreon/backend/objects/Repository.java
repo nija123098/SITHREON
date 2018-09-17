@@ -8,6 +8,8 @@ import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.StringUtil;
 import com.nija123098.sithreon.backend.util.throwable.InvalidRepositoryException;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
+import com.nija123098.sithreon.backend.util.throwable.SithreonException;
+import com.nija123098.sithreon.backend.util.throwable.SithreonSecurityException;
 import com.nija123098.sithreon.backend.util.throwable.connection.GeneralConnectionException;
 
 import java.io.File;
@@ -70,6 +72,7 @@ public class Repository implements Comparable<Repository> {
         } catch (GeneralConnectionException e) {
             throw e;
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
         return true;
@@ -77,17 +80,28 @@ public class Repository implements Comparable<Repository> {
 
     /**
      * Clones or pulls the repository locally to the location given by {@link this#getLocalRepoLocation()}.
+     *
+     * @param hash the hash to set the repository at.
      */
-    private void gitClone() {
+    public void gitClone(String hash) {
         boolean pulling = Files.exists(Paths.get(this.getLocalRepoLocation()));
         try {
             if (!pulling) new File(this.getLocalRepoLocation()).mkdirs();
-            Process process = new ProcessBuilder("git", pulling ? "pull" : "clone", ConnectionUtil.getExternalProtocolName() + "://" + this.repo).directory(new File(this.getLocalRepoLocation())).start();
-            if (!process.waitFor(1, TimeUnit.MINUTES)) {
-                process.destroyForcibly();
+            Process cloneProcess = new ProcessBuilder("git", pulling ? "pull" : "clone", ConnectionUtil.getExternalProtocolName() + "://" + this.repo).directory(new File(this.getLocalRepoLocation())).start();
+            if (!cloneProcess.waitFor(2, TimeUnit.MINUTES)) {
+                cloneProcess.destroyForcibly();
                 ConnectionUtil.throwConnectionException("Timeout " + (pulling ? "pulling" : "cloning") + " git repository " + this.repo);
             }
-            process.destroyForcibly();
+            cloneProcess.destroyForcibly();
+            if (cloneProcess.exitValue() != 0) throw new SithreonSecurityException("Unable to exit cloning properly");
+
+            Process checkoutProcess = new ProcessBuilder("git", "checkout", hash).start();
+            if (!checkoutProcess.waitFor(2, TimeUnit.MINUTES)) {
+                checkoutProcess.destroyForcibly();
+                if (checkoutProcess.exitValue() == 1) throw new SithreonException("Unknown checkout l");
+            }
+            checkoutProcess.destroyForcibly();
+            if (checkoutProcess.exitValue() != 0) throw new SithreonSecurityException("Unable to exit cloning properly");
         } catch (IOException e) {
             ConnectionUtil.throwConnectionException("Unable to complete git " + (pulling ? "pull" : "clone") + this.repo, e);
         } catch (InterruptedException e) {

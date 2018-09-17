@@ -26,7 +26,9 @@ public class ConnectionUtil {
     public static boolean hasGeneralConnection() {
         return Stream.of(Config.standardAccessibleDomains.split(Pattern.quote(","))).map(String::trim).parallel().noneMatch(s -> {
             try {
-                return !InetAddress.getByName(s).isReachable(5_000);
+                boolean b = !InetAddress.getByName(s).isReachable(5_000);
+                if (b) Log.WARN.log("Unable to connect to " + s);
+                return b;
             } catch (IOException e) {
                 return true;
             }

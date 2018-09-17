@@ -4,12 +4,17 @@ import com.nija123098.sithreon.backend.networking.MachineAction;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonException;
+import com.nija123098.sithreon.game.management.DefaultGameRules;
+import com.nija123098.sithreon.game.management.GameRules;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.math.BigInteger;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -95,22 +100,10 @@ public class Config {
      */
     public static Integer internalPort;
 
-    // MISCELLANEOUS
-
-    /**
-     * The unique id of the machine.
-     */
-    public static String machineId;
-
     /**
      * The priority this client has to serve a server.
      */
     public static Integer priority;
-
-    /**
-     * The number of milliseconds between database saves.
-     */
-    public static Integer databaseSaveDelay;
 
     /**
      * The comma separated list of domains or domains to check if dependent connections are up.
@@ -122,10 +115,28 @@ public class Config {
      */
     public static Boolean useSecure;
 
+    // INTERNAL
+
+    /**
+     * The unique id of the machine.
+     */
+    public static String machineId;
+
+    /**
+     * The number of milliseconds between database saves.
+     */
+    public static Integer databaseSaveDelay;
+
     /**
      * The level to display logs at.
      */
     public static Log logLevel = Log.TRACE;
+
+    // GAME
+
+    public static Class<? extends GameRules> gameRules = DefaultGameRules.class;
+
+    // MISCELLANEOUS
 
     /**
      * If the config should be deleted on startup.
@@ -245,6 +256,18 @@ public class Config {
             }
         });
         FUNCTION_MAP.put(MachineAction[].class, s -> Stream.of(s.split(Pattern.quote(","))).map(MachineAction::valueOf).toArray(MachineAction[]::new));
+        FUNCTION_MAP.put(GameRules.class, s -> {
+            try {
+                return new URLClassLoader(new URL[]{new URL(s)}).loadClass(s.substring(s.lastIndexOf(File.separator), s.lastIndexOf('.')));
+            } catch (MalformedURLException e) {//   Load file from URL.                Load class from package and name.
+                Log.ERROR.log("Invalid URL provided for getting GameRules: " + s, e);
+            } catch (ClassNotFoundException e) {
+                Log.ERROR.log("Unable to find GameRule class in file provided: " + s, e);
+            } catch (ClassCastException e) {
+                Log.ERROR.log("Provided class for GameRule does not implement GameRule: " + s, e);
+            }
+            throw new NoReturnException();
+        });
         try {
             setValues(Config.class, Files.readAllLines(CONFIG_PATH));
         } catch (Exception e) {

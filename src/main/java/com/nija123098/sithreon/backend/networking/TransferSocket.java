@@ -5,6 +5,7 @@ import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.util.ByteHandler;
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.StringUtil;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonSecurityException;
@@ -23,10 +24,7 @@ import java.net.SocketException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,6 +55,24 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * The {@link Cipher} to decrypt messages sent to this connection.
      */
     private static final Cipher DECRYPTION_CIPHER;
+
+    /**
+     * The set of one use authentication codes.
+     */
+    private final Set<String> CODES = new HashSet<>();
+
+    /**
+     * Gets a single use authentication code.
+     *
+     * @return the code.
+     */
+    public String getOneUseAuthenticationCode() {
+        byte[] bytes = new byte[256];
+        RANDOM.nextBytes(bytes);
+        String code = StringUtil.base64EncodeOneLine(bytes);
+        if (!CODES.add(code)) return getOneUseAuthenticationCode();
+        return code;
+    }
 
     static {
         try {
@@ -127,6 +143,11 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * The certificate the other side has claimed to be or has been identified as.
      */
     private final AtomicReference<Certificate> otherCertificate = new AtomicReference<>();
+
+    /**
+     * The allowed machine actions the other side of the socket is allowed to use.
+     */
+    private final EnumSet<MachineAction> allowedMachineActions = EnumSet.noneOf(MachineAction.class);
 
     /**
      * The priority of the other machine for use in {@link TransferSocket#compareTo(Object)}.
@@ -201,20 +222,28 @@ public class TransferSocket implements Comparable<TransferSocket> {
                         pendingBytes.add(buffer, readSize);
                     }
                     if (packageSize == -1) {// Pet the processing size
-                        if (pendingBytes.size() > Integer.BYTES) {
+                        if (pendingBytes.size() > Integer.BYTES)
                             packageSize = ObjectSerialization.deserialize(Integer.class, pendingBytes.getBytes(true, Integer.BYTES));
-                        } else continue;
+                        else continue;
                     }
-                    if (pendingBytes.size() >= packageSize) {// Possess
+                    if (pendingBytes.size() >= packageSize) {
                         machineAction = MachineAction.values()[pendingBytes.get(0)];// the first byte determines the action
+                        if (machineAction.requiresAuthentication()) {
+                            if (!this.authenticated.get()) {// Basic authentication check
+                                Log.WARN.log("Connection from " + this.getConnectionName() + " attempted using authentication required MachineAction " + machineAction + " before being authenticated, dropping connection.");
+                                this.close();
+                                return;
+                            }// Best not to forget this part.
+                            if (!this.allowedMachineActions.contains(machineAction)) {// Check specific permissions
+                                Log.WARN.log("Connection from " + this.getConnectionName() + " attempted using MachineAction " + machineAction + " but does not have permssion to, dropping connection.");
+                                this.close();
+                                return;
+                            }
+                        }
                         machineActionArgs = machineAction.read(this, pendingBytes);
                         if (machineActionArgs == null) continue;// args incomplete, wait for more data
-                        if (machineAction.requiresAuthentication() && !this.authenticated.get())
-                            Log.WARN.log("Connection from " + this.getConnectionName() + " attempted using non-authentication MachineAction " + machineAction + " before being authenticated, dropping.");
-                        else {
-                            Log.DEBUG.log("Received MachineAction of type " + machineAction + " from " + this.getConnectionName());
-                            machineAction.act(this, machineActionArgs);
-                        }
+                        Log.DEBUG.log("Received MachineAction of type " + machineAction + " from " + this.getConnectionName());
+                        machineAction.act(this, machineActionArgs);
                         packageSize = -1;
                         waitForMore = pendingBytes.isEmpty();
                     } else waitForMore = true;
@@ -343,9 +372,36 @@ public class TransferSocket implements Comparable<TransferSocket> {
             Log.WARN.log("Machine " + this.getConnectionName() + " requested an affirmation of no authentication with authentication required");
             this.close();
         } else {
+            this.allowedMachineActions.addAll(EnumSet.allOf(MachineAction.class));
             this.authenticateThis();
             this.authenticateOther();
             Log.INFO.log("Connection from " + this.getConnectionName() + " connected through mutual affirmation of no authentication");
+        }
+    }
+
+    /**
+     * Uses the temporary authentication code granted by the other side to gain authentication
+     * and the permissions provided by {@link TransferSocket#authenticateWithTemporaryCode(String)}.
+     *
+     * @param code the code.
+     */
+    public void useTemporaryCodeAuthentication(String code) {
+        this.allowedMachineActions.add(MachineAction.READY_TO_SERVE);
+        this.authenticateThis();
+        this.write(MachineAction.AUTHENTICATE_WITH_TEMPORARY_CODE, code);
+        this.authenticateOther();
+        this.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER);
+    }
+
+    @Action(MachineAction.AUTHENTICATE_WITH_TEMPORARY_CODE)
+    public void authenticateWithTemporaryCode(String code) {
+        if (CODES.remove(code)) {
+            this.allowedMachineActions.addAll(EnumSet.allOf(MachineAction.class));
+            this.authenticateThis();// todo restrict permissions on this, a lot.
+            this.authenticateOther();
+        } else {
+            Log.WARN.log("Temporary code authentication failed");
+            this.close();
         }
     }
 
@@ -366,6 +422,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
         if (this.otherCertificate.get() != null) {
             Log.WARN.log("Machine " + this.getConnectionName() + " attempted to re-identify it's self");
             this.close();
+            return;
         }
         if (otherCertificateSerial.equals(Config.selfCertificateSerial)) {// machines not required to hold their own cert
             Log.WARN.log("Opposite claims to be this machine.  Even if this were correct it would be insecure.  Consider disabling authentication in the config for testing or passing configs by arguments.  Disconnecting.");
@@ -443,6 +500,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
             } else if (!Arrays.equals(DECRYPTION_CIPHER.doFinal(encryptedChallengeResponse), this.challenge)) {
                 Log.WARN.log("Connection from " + this.getConnectionName() + " failed authentication with incorrect challenge response");
             } else {
+                this.allowedMachineActions.addAll(this.otherCertificate.get().allowedActions());
                 this.authenticateThis();
                 Log.INFO.log("Connection from " + this.getConnectionName() + " authenticated");
                 return;
@@ -468,6 +526,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * Processes when the other is proven to be authentic.
      */
     private void authenticateThis() {
+        if (this.allowedMachineActions.isEmpty()) Log.ERROR.log("Authenticated but no machine actions have been allowed to other side.");
         this.authenticated.set(true);
         if (this.otherAuthenticated.get()) this.mutualAuthentication();
     }

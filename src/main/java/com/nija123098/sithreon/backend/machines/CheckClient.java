@@ -15,7 +15,7 @@ import java.io.IOException;
 /**
  * The {@link Machine} representation of a client to the super
  * server that checks the content of a repository to determine if
- * it is possible and safe to run by the {@link RunnerClient}.
+ * it is possible and safe to run by the {@link GameClient}.
  *
  * @author nija123098
  */

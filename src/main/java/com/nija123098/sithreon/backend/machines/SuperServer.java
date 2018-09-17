@@ -4,12 +4,12 @@ import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.networking.*;
-import com.nija123098.sithreon.backend.objects.Match;
-import com.nija123098.sithreon.backend.objects.PriorityLevel;
-import com.nija123098.sithreon.backend.objects.Repository;
+import com.nija123098.sithreon.backend.objects.*;
 import com.nija123098.sithreon.backend.util.DualPriorityResourceManager;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
+import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
+import com.nija123098.sithreon.game.management.GameRules;
 
 import java.util.*;
 import java.util.concurrent.ScheduledExecutorService;
@@ -26,6 +26,11 @@ import java.util.stream.Collectors;
  * @author nija123098
  */
 public class SuperServer extends Machine {
+    /**
+     * The game rules for other servers to use
+     */
+    private final GameRules gameRules;
+
     /**
      * A {@link Set} of all {@link Repository}s approved at the last check of their being updated.
      * <p>
@@ -71,6 +76,12 @@ public class SuperServer extends Machine {
 
     public SuperServer() {
         Database.init();
+        try {
+            this.gameRules = Config.gameRules.newInstance();
+        } catch (InstantiationException | IllegalAccessException e) {
+            Log.ERROR.log("Unable to initialize GameRule", e);
+            throw new NoReturnException();
+        }
         this.checkRepositoryQueue.addAll(Database.REGISTERED_REPOS.keySet());
         new SocketAcceptor(this, Config.externalPort);
         ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(1, r -> ThreadMaker.getThread(ThreadMaker.BACKEND, "Repository Update Checker", true, r));
@@ -80,11 +91,12 @@ public class SuperServer extends Machine {
             else try {
                 if (repository.isApproved()) this.approvedRepos.add(repository);// should already contain it
                 else if (!this.codeCheckResourceManager.getFirstWaiting().contains(repository) && !repository.getRepositoryConfig().disabled && !repository.isUpToDate()) {
+                    Log.DEBUG.log("Adding " + repository + " to check queue");
                     this.invalidateRepo(repository);
                     this.codeCheckResourceManager.giveFirst(repository);
                 }// no action if the repository is up to date but not approved
                 this.checkRepositoryQueue.add(repository);
-            } catch (Throwable t) {
+            } catch (Exception t) {
                 Log.WARN.log("Exception checking if repository was up to date: " + repository.toString(), t);
             }
         }, 1, 1, TimeUnit.MINUTES);
@@ -118,7 +130,7 @@ public class SuperServer extends Machine {
         socket.setOnClose(null);
         if (result) {// validate repo
             this.approvedRepos.add(repository);
-            List<Match> matches = this.getMatches(repository);
+            List<Match> matches = this.gameRules.getMatches(this.approvedRepos, repository);
             Database.MATCHES_TO_DO.putAll(matches.stream().collect(Collectors.toMap(Function.identity(), i -> true)));
             matches.forEach(this.gameRunnerResourceManager::giveFirst);
             Log.INFO.log("Repository " + repository + " of hash " + hash + " passed code inspection: " + report);
@@ -126,26 +138,16 @@ public class SuperServer extends Machine {
     }
 
     /**
-     * Gets the list of {@link Match}s to be scheduled in response to the {@link Repository} update.
-     *
-     * @param updatedRepo the {@link Repository} to get the {@link Match}s for.
-     * @return the list of {@link Match}s, in no particular order, to have played in response to the update.
-     */
-    private List<Match> getMatches(Repository updatedRepo) {// round robin
-        return this.approvedRepos.stream().filter(repository -> !repository.equals(updatedRepo)).map(repository -> new Match(repository, updatedRepo, repository.getLastCheckedHeadHash(), updatedRepo.getLastCheckedHeadHash(), System.currentTimeMillis())).collect(Collectors.toList());
-    }
-
-    /**
      * The {@link MachineAction} method to notify this instance that the {@link Match} has been completed.
      *
-     * @param match    the match played by the responding {@link GameServer}.
-     * @param firstWin if the first repository was the victor of the match.
+     * @param match   the match played by the responding {@link GameServer}.
+     * @param winners the winners of the match.
      */
     @Action(MachineAction.MATCH_COMPLETE)
-    public void matchComplete(Match match, Boolean firstWin, TransferSocket socket) {
+    public void matchComplete(Match match, Lineup winners, TransferSocket socket) {
         Database.MATCHES_TO_DO.remove(match);
-        Database.FIRST_WINS.put(match.getMatchUp(), firstWin);// must insert MatchUps
-        Log.INFO.log("Match " + match + " complete and was won by " + (firstWin ? match.getFirst() : match.getSecond()));
+        Database.MATCHUP_WINNERS.put(match.getMatchUp(), winners);// must insert MatchUps
+        Log.INFO.log("Match " + match + " complete and was won by " + winners);
         socket.setOnClose(null);
     }
 
@@ -158,16 +160,21 @@ public class SuperServer extends Machine {
     private void invalidateRepo(Repository repository) {
         this.approvedRepos.remove(repository);
         new HashMap<>(this.matchesInProgress).forEach((match, socket) -> {
-            if (match.getFirst().equals(repository) || match.getSecond().equals(repository)) {
+            if (match.containsRepo(repository)) {
                 TransferSocket transferSocket = this.matchesInProgress.remove(match);
                 if (transferSocket != null) {
                     transferSocket.write(MachineAction.MATCH_OUT_OF_DATE, repository);// for thread safety
                 }
             }
         });
-        Database.FIRST_WINS.keySet().removeIf(matchUp -> matchUp.getFirst().equals(repository) || matchUp.getSecond().equals(repository));
+        Database.MATCHUP_WINNERS.keySet().removeIf(matchUp -> matchUp.containsRepo(repository));
     }
 
+    /**
+     * Registers the {@link Repository} to be part of the competition.
+     *
+     * @param repository the {@link Repository} to be part of the competition.
+     */
     public void registerRepository(Repository repository) {
         if (Database.REGISTERED_REPOS.get(repository)) Log.INFO.log("Repo already registered");
         else {

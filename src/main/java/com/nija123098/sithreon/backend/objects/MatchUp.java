@@ -1,71 +1,76 @@
 package com.nija123098.sithreon.backend.objects;
 
-import java.util.Objects;
+import com.nija123098.sithreon.backend.util.StringUtil;
+
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
- * A object representing a pairing of two competitors.
- * <p>
- * The {@link Repository}s competing will be sorted
- * according to the {@link Repository#compareTo(Repository)}.
+ * A object representing a list of {@link Lineup}s to battle.
+ *
+ * A {@link Match} is a specific version of this.
+ * @see Match
  */
 public class MatchUp {
 
     /**
      * The competing repositories.
      */
-    private final Repository first, second;
+    private final List<Lineup> lineups;
 
-    /**
-     * Constructs a pairing of two competitors which is sorted
-     * in order of guaranteeing that in the same airing the first
-     * competitor will always be the first listed competitor.
-     *
-     * @param one   a {@link Repository}.
-     * @param other another {@link Repository}.
-     */
-    public MatchUp(Repository one, Repository other) {
-        if (one.compareTo(other) < 0) {
-            this.first = one;
-            this.second = other;
-        } else {
-            this.first = other;
-            this.second = one;
-        }
+    public MatchUp(List<Lineup> lineups) {
+        if (lineups == null) this.lineups = null;
+        else {
+            List<Lineup> list = new ArrayList<>(lineups);
+            list.sort(Comparator.comparing(Lineup::toString));
+            this.lineups = Collections.unmodifiableList(list);
+        }// Match must compare for queuing, so this can not have it's own comparator implementation
     }
 
     /**
-     * Returns the first competing {@link Repository}.
-     *
-     * @return the first competing {@link Repository}.
+     * Constructs a match up of a list of lineups.
      */
-    public Repository getFirst() {
-        return this.first;
+    public MatchUp(String lineups) {
+        this(Stream.of(lineups.split(Pattern.quote("|"))).map(Lineup::new).collect(Collectors.toList()));
     }
 
     /**
-     * Returns the second competing {@link Repository}.
+     * Gets the list of competing lineups for this instance.
      *
-     * @return the second competing {@link Repository}.
+     * @return the list of competing lineups.
      */
-    public Repository getSecond() {
-        return this.second;
+    public List<Lineup> getLineups() {
+        return this.lineups;
+    }
+
+    /**
+     * Check if this {@link MatchUp} contains the provided {@link Repository}
+     * in any of it's {@link Lineup}s.
+     *
+     * @param repository the {@link Repository} to check for.
+     * @return if the {@link MatchUp} contains the {@link Repository}.
+     */
+    public boolean containsRepo(Repository repository) {
+        return this.lineups.stream().anyMatch(lineup -> lineup.getRepositories().contains(repository));
     }
 
     @Override
     public String toString() {
-        return this.first + "+" + this.second;
+        return StringUtil.join("|", lineups.stream().map(lineup -> StringUtil.join("+", lineup.getRepositories().stream().map(Object::toString).toArray(String[]::new))).toArray(String[]::new));
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MatchUp other = (MatchUp) o;
-        return this.first.equals(other.first) && this.second.equals(other.second);
+        MatchUp matchUp = (MatchUp) o;
+        return Objects.equals(this.lineups, matchUp.lineups);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.first, this.second);
+        return Objects.hash(this.lineups);
     }
 }

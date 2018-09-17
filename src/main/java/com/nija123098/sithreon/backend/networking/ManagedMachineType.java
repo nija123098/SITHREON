@@ -3,7 +3,7 @@ package com.nija123098.sithreon.backend.networking;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.CheckClient;
 import com.nija123098.sithreon.backend.machines.GameServer;
-import com.nija123098.sithreon.backend.machines.RunnerClient;
+import com.nija123098.sithreon.backend.machines.GameClient;
 
 /**
  * An enum representing the types of {@link Machine}s that report
@@ -19,7 +19,7 @@ public enum ManagedMachineType {
      */
     GAME_SERVER,
     /**
-     * The representation of {@link RunnerClient}.
+     * The representation of {@link GameClient}.
      */
     GAME_RUNNER,
     ;

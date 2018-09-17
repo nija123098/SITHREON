@@ -96,7 +96,7 @@ public abstract class Machine {
      * @param socket      the socket representing the {@link ManagedMachineType} reporting.
      */
     @Action(MachineAction.READY_TO_SERVE)
-    public void readyToServe(ManagedMachineType machineType, TransferSocket socket) {
+    public final void readyToServe(ManagedMachineType machineType, TransferSocket socket) {
         this.notifyReady(machineType, socket);
     }
 

@@ -1,10 +1,11 @@
 package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
-import com.nija123098.sithreon.backend.objects.Match;
-import com.nija123098.sithreon.backend.objects.MatchUp;
-import com.nija123098.sithreon.backend.objects.Repository;
+import com.nija123098.sithreon.backend.objects.*;
 import com.nija123098.sithreon.backend.util.ByteHandler;
+import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.backend.util.throwable.SithreonException;
+import com.nija123098.sithreon.game.management.GameArguments;
 
 import java.lang.reflect.Array;
 import java.math.BigInteger;
@@ -14,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 
 /**
  * Handles the serialization of objects
@@ -42,19 +42,18 @@ public class ObjectSerialization {
         registerSerialization(Long.class, (aLong -> ByteBuffer.allocate(Long.BYTES).putLong(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Long.BYTES).put(bytes).flip()).asLongBuffer().get()));
         registerSerialization(Integer.class, (aLong -> ByteBuffer.allocate(Integer.BYTES).putInt(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Integer.BYTES).put(bytes).flip()).asIntBuffer().get()));
         registerSerialization(String.class, s -> s.getBytes(StandardCharsets.UTF_8), bytes -> new String(bytes, Charset.forName("UTF-8")));
-        registerSerialization(Repository.class, repository -> serialize(String.class, repository.toString()), bytes -> Repository.getRepo(deserialize(String.class, bytes)));
+        registerStringSerialization(Repository.class, Repository::toString, Repository::getRepo);
         registerSerialization(Boolean.class, bool -> new byte[]{bool ? ((byte) 1) : 0}, bytes -> bytes[0] == 1);
         registerSerialization(byte[].class, Function.identity(), Function.identity());
-        registerSerialization(MatchUp.class, matchUp -> serialize(String.class, matchUp.toString()), bytes -> {
-            String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
-            return new MatchUp(Repository.getRepo(split[0]), Repository.getRepo(split[1]));
-        });
-        registerSerialization(Match.class, match -> serialize(String.class, match.toString()), bytes -> {
-            String[] split = deserialize(String.class, bytes).split(Pattern.quote("+"));
-            return new Match(Repository.getRepo(split[0]), Repository.getRepo(split[1]), split[2], split[3], Long.parseLong(split[4]));
-        });
+        registerStringSerialization(MatchUp.class, MatchUp::toString, MatchUp::new);
+        registerStringSerialization(Match.class, Match::toString, Match::new);
+        registerStringSerialization(Lineup.class, Lineup::toString, Lineup::new);
+        registerStringSerialization(Team.class, Team::toString, Team::new);
+        registerStringSerialization(TeamMember.class, TeamMember::toString, TeamMember::new);
+        registerStringSerialization(Competitor.class, Competitor::toString, Competitor::new);
         registerSerialization(Certificate.class, Certificate::getBytes, Certificate::getCertificate);
         registerSerialization(BigInteger.class, BigInteger::toByteArray, BigInteger::new);
+        registerSerialization(GameArguments.class, GameArguments::getBytes, GameArguments::new);
     }
 
     /**
@@ -68,6 +67,19 @@ public class ObjectSerialization {
     private static <E> void registerSerialization(Class<E> type, Function<E, byte[]> toBytes, Function<byte[], E> toObject) {
         TO_OBJECT.put(type, toObject);
         TO_BYTES.put(type, toBytes);
+    }
+
+    /**
+     * Registers methods to use for serialization and deserialization based on the type of an object with a string intermediate step.
+     *
+     * @param type     the type of the objects to serialize and deserialize.
+     * @param toBytes  the function to for serialization though strings.
+     * @param toObject the function for deserialization through strings.
+     * @param <E>      the type being serialized and deserialized.
+     */
+    private static <E> void registerStringSerialization(Class<E> type, Function<E, String> toBytes, Function<String, E> toObject) {
+        TO_OBJECT.put(type, bytes -> toObject.apply(deserialize(String.class, bytes)));
+        TO_BYTES.put(type, o -> serialize(String.class, toBytes.apply((E) o)));
     }
 
     /**
@@ -118,6 +130,10 @@ public class ObjectSerialization {
                 Array.set(array, i, function.apply(byteHandler.getBytes(true, integerFunction.apply(byteHandler.getBytes(true, Integer.BYTES)))));
             }
             return (E) array;
-        } else return ((Function<byte[], E>) TO_OBJECT.get(type)).apply(bytes);
+        } else {
+            function = (Function<byte[], E>) TO_OBJECT.get(type);
+            if (function == null) Log.ERROR.log("ObjectSerialization does not support type: " + type, new SithreonException("No serialization support for " + type));
+            return function.apply(bytes);
+        }
     }
 }

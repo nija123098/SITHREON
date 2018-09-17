@@ -1,6 +1,12 @@
 package com.nija123098.sithreon.backend.objects;
 
-import java.util.Objects;
+import com.nija123098.sithreon.backend.util.StringUtil;
+
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BinaryOperator;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * The object specifying a match between two {@link Repository}
@@ -14,66 +20,77 @@ public class Match extends MatchUp implements Comparable<Match> {
     private final long time;
 
     /**
-     * The hashes expected to be up to date and approved.
+     * List of {@link List} competing.
      */
-    private final String firstHash, secondHash;
+    private final List<Team> teams;
 
     /**
      * Constructs a standard match whose repository order will be sorted
      * according to {@link Repository#compareTo(Repository)}.
      *
-     * @param one       one {@link Repository}.
-     * @param other     another {@link Repository}.
-     * @param oneHash   the expected and approved HEAD hash of the one {@link Repository}.
-     * @param otherHash the expected and approved HEAD hash of the other {@link Repository}.
-     * @param time      the time the match was initially scheduled.
+     * @param teams the list of teams competing in this match.
+     * @param time  the time the match was initially scheduled.
      */
-    public Match(Repository one, Repository other, String oneHash, String otherHash, long time) {
-        super(one, other);
-        if (this.getFirst().equals(one)) {
-            this.firstHash = oneHash;
-            this.secondHash = otherHash;
-        } else {
-            this.firstHash = otherHash;
-            this.secondHash = oneHash;
-        }
+    public Match(List<Team> teams, long time) {
+        super((List<Lineup>) null);
+        List<Team> list = new ArrayList<>(teams);
+        list.sort(Comparator.comparing(Lineup::toString));
+        this.teams = Collections.unmodifiableList(list);
         this.time = time;
+        this.setupTeams();
+    }
+
+    public Match(String s) {
+        super((List<Lineup>) null);
+        String[] split = s.split(Pattern.quote("+"));
+        this.teams = new ArrayList<>(split.length - 1);
+        for (int i = 0; i < split.length - 1; i++)
+            this.teams.add(new Team(split[i]));
+        this.time = Long.parseLong(split[split.length - 1]);
+        this.teams.sort(Comparator.naturalOrder());
+        this.setupTeams();
+    }
+
+    private void setupTeams() {
+        AtomicInteger teamNumber = new AtomicInteger();
+        this.teams.forEach(team -> team.setTeamNumber(teamNumber.getAndIncrement()));
     }
 
     /**
-     * Returns the expected HEAD hash of the {@link Match#getFirst()} {@link Repository}.
+     * Gets the list of teams competing.
      *
-     * @return the expected HEAD hash of the {@link Match#getFirst()} {@link Repository}.
+     * @return the list of teams competing.
      */
-    public String getFirstHash() {
-        return this.firstHash;
+    public List<Team> getTeams() {
+        return this.teams;
     }
 
     /**
-     * Returns the expected HEAD hash of the {@link Match#getSecond()} {@link Repository}.
+     * Gets the highest priority of all competitors.
      *
-     * @return the expected HEAD hash of the {@link Match#getSecond()} {@link Repository}.
-     */
-    public String getSecondHash() {
-        return this.secondHash;
-    }
-
-    /**
-     * Gets the highest priority of the two {@link Repository} instances.
-     *
-     * @return the highest priority of the two {@link Repository} instances.
+     * @return the highest priority of all competitors.
      */
     private int getHighPriority() {
-        return Math.max(this.getFirst().getPriority(), this.getSecond().getPriority());
+        return this.getPriority(Math::max);
     }
 
     /**
-     * Gets the lowest priority of the two {@link Repository} instances.
+     * Gets the lowest priority of all competitors.
      *
-     * @return the lowest priority of the two {@link Repository} instances.
+     * @return the lowest priority of all competitors.
      */
     private int getLowPriority() {
-        return Math.min(this.getFirst().getPriority(), this.getSecond().getPriority());
+        return this.getPriority(Math::min);
+    }
+
+    /**
+     * Runs a get priority based equally on each {@link TeamMember}.
+     *
+     * @param function the priority operator.
+     * @return the priority according to the binary operator.
+     */
+    private int getPriority(BinaryOperator<Integer> function) {
+        return this.teams.stream().flatMap(team -> team.getMembers().stream()).map(TeamMember::getRepository).map(Repository::getPriority).reduce(0, function);
     }
 
     /**
@@ -82,7 +99,12 @@ public class Match extends MatchUp implements Comparable<Match> {
      * @return the {@link MatchUp} for this instance.
      */
     public MatchUp getMatchUp() {
-        return new MatchUp(this.getFirst(), this.getSecond());
+        return new MatchUp(new ArrayList<>(this.teams));
+    }
+
+    public List<Competitor> getCompetitors() {
+        String matchId = StringUtil.getSha256Hash(this.toString());// Makes it shorter
+        return this.teams.stream().flatMap(team -> team.getMembers().stream()).map(teamMember -> new Competitor(teamMember.getRepository(), teamMember.getHash(), matchId, teamMember.getTeamNumber())).collect(Collectors.toList());
     }
 
     @Override
@@ -94,19 +116,20 @@ public class Match extends MatchUp implements Comparable<Match> {
 
     @Override
     public String toString() {
-        return super.toString() + "+" + this.firstHash + "+" + this.secondHash + "+" + this.time;
+        return StringUtil.join("+", this.teams.stream().map(Team::toString).toArray(String[]::new)) + "+" + this.time;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Match other = (Match) o;
-        return super.equals(other) && this.time == other.time && this.firstHash.equals(other.firstHash) && this.secondHash.equals(other.secondHash);
+        if (!super.equals(o)) return false;
+        Match match = (Match) o;
+        return this.time == match.time && this.teams.equals(match.teams);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(this.firstHash, this.secondHash, this.time);
+        return Objects.hash(super.hashCode(), this.time);
     }
 }

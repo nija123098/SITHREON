@@ -1,17 +1,22 @@
 package com.nija123098.sithreon.backend.util;
 
 import com.nija123098.sithreon.backend.Config;
+import com.nija123098.sithreon.backend.util.throwable.IOExceptionWrapper;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonException;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class FileUtil {
     /**
@@ -102,5 +107,32 @@ public class FileUtil {
         KeyStore keyStore = getLoadedKeyStore(file, password);
         storeConsumer.accept(keyStore);
         writeKeyStore(file, keyStore, password);
+    }
+
+    /**
+     * Walks the file tree of the specified {@link Path} with the option to filter out parts of the tree.
+     *
+     * @param root the root of the file tree walk.
+     * @param pathPredicate the predicate for determining if
+     * @param pathConsumer the consumer for files and folders accepted by the predicate.
+     * @param options the {@link FileVisitOption}s for walking the file tree.
+     * @throws IOException if an I/O error is thrown when accessing a file.
+     */
+    public static void walk(Path root, Predicate<Path> pathPredicate, Consumer<Path> pathConsumer, FileVisitOption... options) throws IOException {
+        if (!pathPredicate.test(root)) return;
+        if (Files.isDirectory(root)) {
+            try {
+                Files.walk(root, 1, options).forEach(path -> {
+                    try {
+                        walk(path, pathPredicate, pathConsumer);
+                    } catch (IOException e) {
+                        throw new IOExceptionWrapper(e);
+                    }
+                });
+            } catch (IOExceptionWrapper e) {
+                throw e.getCause();
+            }
+        }
+        pathConsumer.accept(root);
     }
 }

@@ -2,13 +2,17 @@ package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.command.Command;
+import com.nija123098.sithreon.backend.command.commands.GameRunnerCommand;
 import com.nija123098.sithreon.backend.machines.CheckClient;
+import com.nija123098.sithreon.backend.machines.GameClient;
 import com.nija123098.sithreon.backend.machines.GameServer;
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.objects.Match;
 import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.ByteHandler;
 import com.nija123098.sithreon.backend.util.Log;
+import com.nija123098.sithreon.game.management.GameAction;
+import com.nija123098.sithreon.game.management.GameUpdate;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -29,6 +33,10 @@ public enum MachineAction {
      * Affirms a policy of no authentication between machine connections.
      */
     AFFIRM_NO_AUTHENTICATION(TransferSocket.class, false),
+    /**
+     * Utilizes a temporary code to authenticate with the permissions of a {@link GameRunnerCommand}
+     */
+    AUTHENTICATE_WITH_TEMPORARY_CODE(TransferSocket.class, false),
     /**
      * Requests a certificate.
      */
@@ -68,6 +76,22 @@ public enum MachineAction {
      */
     REPO_CODE_REPORT(SuperServer.class, true),
     /**
+     * Indicates that the {@link GameClient} is ready to receive the files for it's client.
+     */
+    READY_TO_RECEIVE_COMPETITOR_DATA(GameServer.class, true),
+    /**
+     * Indicates that the {@link GameClient} is ready to receive the files for it's client.
+     */
+    SEND_COMPETITOR_DATA(GameClient.class, true),
+    /**
+     * Indicates that the {@link GameClient} is ready to receive the files for it's client.
+     */
+    COMPETITOR_DATA_COMPLETE(GameClient.class, true),
+    /**
+     * Starts a {@link Match} managed by a {@link GameServer}.
+     */
+    START_MATCH(GameClient.class, true),
+    /**
      * The action to start a game specified by a {@link Match}.
      */
     RUN_GAME(GameServer.class, true),
@@ -79,6 +103,14 @@ public enum MachineAction {
      * The action to respond with a result from a {@link Match}.
      */
     MATCH_COMPLETE(SuperServer.class, true),
+    /**
+     * The action for a {@link GameClient} to tell the {@link GameServer} of a {@link GameAction}.
+     */
+    GAME_ACTION(GameServer.class, true),
+    /**
+     * The action for a {@link GameServer} to tell the {@link GameClient} of a {@link GameUpdate}.
+     */
+    GAME_UPDATE(GameClient.class, true)
     ;
 
     /**

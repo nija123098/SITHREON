@@ -1,10 +1,7 @@
 package com.nija123098.sithreon.backend;
 
 import com.nija123098.sithreon.backend.machines.SuperServer;
-import com.nija123098.sithreon.backend.objects.Match;
-import com.nija123098.sithreon.backend.objects.MatchUp;
-import com.nija123098.sithreon.backend.objects.PriorityLevel;
-import com.nija123098.sithreon.backend.objects.Repository;
+import com.nija123098.sithreon.backend.objects.*;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 
@@ -17,7 +14,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -26,7 +22,7 @@ import java.util.stream.Stream;
  *
  * @author nija123098
  */
-public class Database<K, V> extends HashMap<K, V> {
+public class Database<K, V> extends HashMap<K, V> {// todo use an actual DB
     /**
      * An array of the databases instances.
      */
@@ -60,7 +56,7 @@ public class Database<K, V> extends HashMap<K, V> {
     /**
      * Stores a map of match ups and their victors where true represents the first repository's victory, and false represents the second repository's victory.
      */
-    public static final Database<MatchUp, Boolean> FIRST_WINS = new Database<>(null, "first_victor", MatchUp.class, Boolean.class);
+    public static final Database<MatchUp, Lineup> MATCHUP_WINNERS = new Database<>(null, "first_victor", MatchUp.class, Lineup.class);
 
     /**
      * Stores if the database has been altered to prevent duplicate saves.
@@ -75,14 +71,8 @@ public class Database<K, V> extends HashMap<K, V> {
         registerConversion(Boolean.class, Boolean::parseBoolean);
         registerConversion(PriorityLevel.class, PriorityLevel::valueOf);
         registerConversion(String.class, Function.identity());
-        registerConversion(MatchUp.class, s -> {
-            String[] split = s.split(Pattern.quote("+"));
-            return new MatchUp(Repository.getRepo(split[0]), Repository.getRepo(split[1]));
-        });
-        registerConversion(Match.class, s -> {
-            String[] split = s.split(Pattern.quote("+"));
-            return new Match(Repository.getRepo(split[0]), Repository.getRepo(split[1]), split[2], split[3], Long.parseLong(split[4]));
-        });
+        registerConversion(MatchUp.class, MatchUp::new);
+        registerConversion(Match.class, Match::new);
     }
 
     private static <E> void registerConversion(Class<E> clazz, Function<String, E> toObject, Function<E, String> toString) {

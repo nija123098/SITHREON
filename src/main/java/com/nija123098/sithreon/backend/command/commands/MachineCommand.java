@@ -45,7 +45,7 @@ public class MachineCommand extends Command {
             case "code runner":
             case "runner":
             case "r":
-                new RunnerClient();
+                new GameClient(null);
                 break;
             case "command":
             case "command client":
