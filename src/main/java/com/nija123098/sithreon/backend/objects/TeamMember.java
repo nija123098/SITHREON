@@ -6,12 +6,14 @@ import java.util.regex.Pattern;
 
 /**
  * Represents a versioned {@link Repository} within a {@link Team}.
+ *
  * @see Competitor
  */
 public class TeamMember implements Comparable<TeamMember> {
     private final String hash;
     private final Repository repository;
     private final AtomicReference<Team> team = new AtomicReference<>();
+
     public TeamMember(Repository repository, String hash) {
         this.repository = repository;
         this.hash = hash;

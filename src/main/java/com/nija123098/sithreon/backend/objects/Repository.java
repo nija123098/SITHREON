@@ -1,22 +1,19 @@
 package com.nija123098.sithreon.backend.objects;
 
+import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.CheckClient;
-import com.nija123098.sithreon.backend.util.ConnectionUtil;
-import com.nija123098.sithreon.backend.util.Log;
-import com.nija123098.sithreon.backend.util.StringUtil;
+import com.nija123098.sithreon.backend.util.*;
 import com.nija123098.sithreon.backend.util.throwable.InvalidRepositoryException;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonException;
-import com.nija123098.sithreon.backend.util.throwable.SithreonSecurityException;
-import com.nija123098.sithreon.backend.util.throwable.connection.GeneralConnectionException;
+import com.nija123098.sithreon.backend.util.throwable.connection.ConnectionException;
+import com.nija123098.sithreon.backend.util.throwable.connection.SpecificConnectionException;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -26,6 +23,12 @@ import java.util.concurrent.TimeUnit;
  * @author nija123098
  */
 public class Repository implements Comparable<Repository> {
+
+    /**
+     * The max time it should take to fetch the repository.
+     */
+    private static final Integer FETCH_TIME = 120_000;
+
     /**
      * A cache of repository objects.
      */
@@ -41,7 +44,11 @@ public class Repository implements Comparable<Repository> {
     public static Repository getRepo(String repo) {
         return CACHE.computeIfAbsent(repo, s -> {
             Repository repository = new Repository(s);
-            if (!repository.isValid()) throw new InvalidRepositoryException(repo);
+            try {
+                if (Config.checkRepositoryValidity && !repository.isValid()) throw new InvalidRepositoryException(repo);
+            } catch (ConnectionException e) {
+                throw new InvalidRepositoryException(repo);
+            }
             return repository;
         });
     }
@@ -57,7 +64,7 @@ public class Repository implements Comparable<Repository> {
      * @param repo the repo to represent.
      */
     private Repository(String repo) {
-        this.repo = repo;
+        this.repo = repo.trim();
     }
 
     /**
@@ -69,44 +76,83 @@ public class Repository implements Comparable<Repository> {
         try {// Domains with repositories should be general connections
             if (!ConnectionUtil.pageExists(ConnectionUtil.getExternalProtocolName() + "://" + this.repo) || this.getHeadHash() == null)
                 return false;// invalid repository
-        } catch (GeneralConnectionException e) {
+        } catch (SpecificConnectionException e) {
+            e.printStackTrace();
+            return false;
+        } catch (ConnectionException e) {
             throw e;
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.WARN.log("Exception checking if repository is valid: " + this.repo, e);
             return false;
         }
         return true;
     }
 
     /**
-     * Clones or pulls the repository locally to the location given by {@link this#getLocalRepoLocation()}.
+     * Fetches the repository locally to the location given
+     * by {@link Repository#getLocalRepoLocation()} if necessary.
      *
      * @param hash the hash to set the repository at.
      */
-    public void gitClone(String hash) {
-        boolean pulling = Files.exists(Paths.get(this.getLocalRepoLocation()));
-        try {
-            if (!pulling) new File(this.getLocalRepoLocation()).mkdirs();
-            Process cloneProcess = new ProcessBuilder("git", pulling ? "pull" : "clone", ConnectionUtil.getExternalProtocolName() + "://" + this.repo).directory(new File(this.getLocalRepoLocation())).start();
-            if (!cloneProcess.waitFor(2, TimeUnit.MINUTES)) {
-                cloneProcess.destroyForcibly();
-                ConnectionUtil.throwConnectionException("Timeout " + (pulling ? "pulling" : "cloning") + " git repository " + this.repo);
+    public synchronized void getSource(String hash) {
+        File location = new File(this.getLocalRepoLocation());
+        if (location.exists()) {
+            if (this.localVersion().equals(hash)) return;
+            try {
+                FileUtil.deleteFiles(location.toPath());
+            } catch (IOException e) {
+                Log.ERROR.log("IOException deleting files for branch: " + location.getAbsolutePath(), e);
             }
-            cloneProcess.destroyForcibly();
-            if (cloneProcess.exitValue() != 0) throw new SithreonSecurityException("Unable to exit cloning properly");
-
-            Process checkoutProcess = new ProcessBuilder("git", "checkout", hash).start();
-            if (!checkoutProcess.waitFor(2, TimeUnit.MINUTES)) {
-                checkoutProcess.destroyForcibly();
-                if (checkoutProcess.exitValue() == 1) throw new SithreonException("Unknown checkout l");
-            }
-            checkoutProcess.destroyForcibly();
-            if (checkoutProcess.exitValue() != 0) throw new SithreonSecurityException("Unable to exit cloning properly");
-        } catch (IOException e) {
-            ConnectionUtil.throwConnectionException("Unable to complete git " + (pulling ? "pull" : "clone") + this.repo, e);
-        } catch (InterruptedException e) {
-            Log.ERROR.log("Unexpected interruption " + (pulling ? "pulling" : "cloning") + " repo " + this.repo, e);
         }
+        location.mkdirs();
+        try {
+            Process initProcess = new ProcessBuilder("git", "init", "--quiet").directory(location).start();
+            if (ProcessUtil.waitOrDestroy(1_000, initProcess))
+                ConnectionUtil.throwConnectionException("Timeout for git init git at: " + location.getAbsolutePath());
+            ProcessUtil.runNonZero(initProcess, exitCode -> new SithreonException("Unable to init git repo: " + exitCode));
+        } catch (IOException e) {
+            Log.ERROR.log("IOException running git init", e);
+        } catch (InterruptedException e) {
+            Log.ERROR.log("Unexpected interruption running git init", e);
+        }
+        try {
+            Process fetchProcess = new ProcessBuilder("git", "fetch", "--quiet", "--depth", "1", ConnectionUtil.getExternalProtocolName() + "://" + this.repo, hash).directory(location).start();
+            if (ProcessUtil.waitOrDestroy(FETCH_TIME, fetchProcess))
+                ConnectionUtil.throwConnectionException("Timeout for git fetch " + this.repo + " " + hash + ": " + StreamUtil.readFully(fetchProcess.getErrorStream(), 1024));
+            ProcessUtil.runNonZero(fetchProcess, exitCode -> new SithreonException("Unable to fetch for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(fetchProcess.getErrorStream())));
+        } catch (IOException e) {
+            ConnectionUtil.throwConnectionException("Unable to complete git fetch: " + this.repo + " " + hash, e);
+        } catch (InterruptedException e) {
+            Log.ERROR.log("Unexpected interruption running git fetch", e);
+        }
+        try {
+            Process checkoutProcess = new ProcessBuilder("git", "checkout", "--quiet", hash).directory(location).start();
+            if (ProcessUtil.waitOrDestroy(FETCH_TIME, checkoutProcess))
+                ConnectionUtil.throwConnectionException("Timeout for git checkout " + this.repo + " " + hash + ": " + StreamUtil.readFully(checkoutProcess.getErrorStream(), 1024));
+            ProcessUtil.runNonZero(checkoutProcess, exitCode -> new SithreonException("Unable to checkout for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(checkoutProcess.getErrorStream())));
+        } catch (IOException e) {
+            ConnectionUtil.throwConnectionException("Unable to complete git checkout: " + this.repo + " " + hash, e);
+        } catch (InterruptedException e) {
+            Log.ERROR.log("Unexpected interruption running git fetch", e);
+        }
+    }
+
+    private String localVersion() {
+        try {
+            Process process = new ProcessBuilder("git", "rev-parse", "--verify", "--quiet", "HEAD").start();
+            if (ProcessUtil.waitOrDestroy(10_000, process)) {
+                throw new SithreonException("git rev-parse took too long");
+            }
+            byte[] current = new byte[40];
+            process.getInputStream().read(current);
+            process.destroyForcibly();
+            return new String(current, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            ConnectionUtil.throwConnectionException("Unable to check git version: " + this.repo);
+        } catch (InterruptedException e) {
+            Log.ERROR.log("Unexpected interrupt running git checkout", e);
+        }
+        throw new NoReturnException();
     }
 
     /**
@@ -115,7 +161,7 @@ public class Repository implements Comparable<Repository> {
      * @return the location of the repository, or where it would be if it were cloned.
      */
     public String getLocalRepoLocation() {
-        return "repos/" + this.repo.replace(".", "-");
+        return "repos" + File.separator + this.repo.replace('/', File.separatorChar);
     }
 
     /**

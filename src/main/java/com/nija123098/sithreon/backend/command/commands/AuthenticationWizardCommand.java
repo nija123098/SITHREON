@@ -18,7 +18,6 @@ import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import sun.security.provider.X509Factory;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -34,8 +33,13 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Assists in making certificates for the authentication system.
+ * <p>
+ * Inserts root configs into config file if generating root.
  */
 public class AuthenticationWizardCommand extends Command {
+    private static final String CERTIFICATE_BEGIN = "-----BEGIN CERTIFICATE-----";
+    private static final String CERTIFICATE_END = "-----END CERTIFICATE-----";
+
     public AuthenticationWizardCommand() {
         super("authorization", "wizard");
         this.registerAlias("authw");
@@ -115,9 +119,9 @@ public class AuthenticationWizardCommand extends Command {
         out.println("Distinguished Name?");
         Certificate certificate = generateRootCertificate(expireTime, receiver, Config.privateKey, MachineAction.values(), scanner.nextLine());
         out.println("Root certificate:");
-        out.println(X509Factory.BEGIN_CERT);
+        out.println(CERTIFICATE_BEGIN);
         out.println(StringUtil.base64EncodeOneLine(certificate.getBytes()));
-        out.println(X509Factory.END_CERT);
+        out.println(CERTIFICATE_END);
         return certificate;
     }
 
@@ -148,9 +152,9 @@ public class AuthenticationWizardCommand extends Command {
         }
         Certificate certificate = generateCertificate(Certificate.getCertificate(Config.selfCertificateSerial), expireTime, receiver, Config.privateKey, actions, distinguishedName);
         out.println("Certificate:");
-        out.println(X509Factory.BEGIN_CERT);
+        out.println(CERTIFICATE_BEGIN);
         out.println(StringUtil.base64EncodeOneLine(certificate.getBytes()));
-        out.println(X509Factory.END_CERT);
+        out.println(CERTIFICATE_END);
         return certificate;
     }
 

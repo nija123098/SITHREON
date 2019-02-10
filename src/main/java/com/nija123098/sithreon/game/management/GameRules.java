@@ -37,7 +37,7 @@ public interface GameRules {
      * Prepares the networking.
      *
      * @param gameUpdateHandler a {@link GameUpdateHandler} for sending out {@link GameUpdate}s.
-     * @param onVictory a handler for when a {@link Team} is victorious.
+     * @param onVictory         a handler for when a {@link Team} is victorious.
      * @return a {@link GameActionHandler} for providing a way to register {@link GameAction}s without calling a instance here.
      */
     GameActionHandler setupNetworking(GameUpdateHandler gameUpdateHandler, Consumer<Team> onVictory);
@@ -53,6 +53,7 @@ public interface GameRules {
     interface GameUpdateHandler {
         void handle(Competitor competitor, GameUpdate update, GameArguments arguments);
     }
+
     @FunctionalInterface
     interface GameActionHandler {
         void handle(Competitor competitor, GameAction action, GameArguments arguments);

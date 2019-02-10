@@ -106,7 +106,7 @@ public class Certificate {
 
     /**
      * If the certificate is a trusted stored root certificate.
-     *
+     * <p>
      * Ignored if the certificate is not a root certificate.
      */
     private final AtomicBoolean trust = new AtomicBoolean();

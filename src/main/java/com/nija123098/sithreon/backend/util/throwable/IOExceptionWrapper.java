@@ -4,7 +4,7 @@ import java.io.IOException;
 
 /**
  * Wraps an {@link IOException} in a {@link RuntimeException}.
- *
+ * <p>
  * This does not extend {@link SithreonException} so it does not get accidentally caught.
  */
 public class IOExceptionWrapper extends RuntimeException {

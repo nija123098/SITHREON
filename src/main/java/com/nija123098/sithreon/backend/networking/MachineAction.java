@@ -2,7 +2,7 @@ package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.command.Command;
-import com.nija123098.sithreon.backend.command.commands.GameRunnerCommand;
+import com.nija123098.sithreon.backend.command.commands.GameClientCommand;
 import com.nija123098.sithreon.backend.machines.CheckClient;
 import com.nija123098.sithreon.backend.machines.GameClient;
 import com.nija123098.sithreon.backend.machines.GameServer;
@@ -34,7 +34,7 @@ public enum MachineAction {
      */
     AFFIRM_NO_AUTHENTICATION(TransferSocket.class, false),
     /**
-     * Utilizes a temporary code to authenticate with the permissions of a {@link GameRunnerCommand}
+     * Utilizes a temporary code to authenticate with the permissions of a {@link GameClientCommand}
      */
     AUTHENTICATE_WITH_TEMPORARY_CODE(TransferSocket.class, false),
     /**
@@ -84,13 +84,13 @@ public enum MachineAction {
      */
     SEND_COMPETITOR_DATA(GameClient.class, true),
     /**
+     * Indicates that the {@link GameClient} is ready to receive the next file from the {@link GameServer}.
+     */
+    READY_FOR_NEXT_FILE(GameServer.class, true),
+    /**
      * Indicates that the {@link GameClient} is ready to receive the files for it's client.
      */
     COMPETITOR_DATA_COMPLETE(GameClient.class, true),
-    /**
-     * Starts a {@link Match} managed by a {@link GameServer}.
-     */
-    START_MATCH(GameClient.class, true),
     /**
      * The action to start a game specified by a {@link Match}.
      */
@@ -110,7 +110,7 @@ public enum MachineAction {
     /**
      * The action for a {@link GameServer} to tell the {@link GameClient} of a {@link GameUpdate}.
      */
-    GAME_UPDATE(GameClient.class, true)
+    GAME_UPDATE(GameClient.class, true),
     ;
 
     /**
@@ -210,7 +210,10 @@ public enum MachineAction {
      */
     public Object[] read(TransferSocket socket, ByteHandler bytes) {
         this.ensureMethodLoad();
-        if (this.argumentTypes.get().length == 0) return new Object[0];
+        if (this.argumentTypes.get().length == 0) {
+            bytes.remove(0);
+            return new Object[0];
+        }
         Object[] objects = new Object[this.argumentTypes.get().length];
         byte argument = 0;
         int serializeLength, objectIndex = 0;
@@ -224,7 +227,7 @@ public enum MachineAction {
             if (bytes.size() < i + serializeLength) return null;
             objects[objectIndex++] = ObjectSerialization.deserialize(this.argumentTypes.get()[argument++], bytes.getBytes(false, i, serializeLength));
             i += serializeLength - 1;
-            if (objectIndex >= this.argumentTypes.get().length) {
+            if (objectIndex >= this.argumentTypes.get().length || objects[objectIndex] instanceof TransferSocket) {
                 bytes.removeRange(0, i + 1);
                 return objects;
             }

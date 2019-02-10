@@ -12,6 +12,7 @@ public class GameArguments {// todo make normal names and args, do not transfer 
      * The wrapped arguments.
      */
     private Object[] objects;
+
     public GameArguments(byte[] bytes) {
         ByteHandler byteHandler = new ByteHandler(bytes);
         Integer argLength = ObjectSerialization.deserialize(Integer.class, byteHandler.getBytes(true, Integer.BYTES));
@@ -26,6 +27,9 @@ public class GameArguments {// todo make normal names and args, do not transfer 
             } catch (ClassNotFoundException e) {
                 Log.WARN.log("Unrecognized class while loading arguments: " + className, e);
             }
+        }
+        if (!byteHandler.isEmpty()) {
+            Log.ERROR.log("Extra bytes left after reading GameArguments: " + byteHandler.size());
         }
     }
 
@@ -51,6 +55,7 @@ public class GameArguments {// todo make normal names and args, do not transfer 
         }
         return bytes.getBytes();
     }
+
     private static <E> byte[] getBytes(E e) {
         return ObjectSerialization.serialize((Class<? super E>) e.getClass(), e);
     }

@@ -3,11 +3,12 @@ package com.nija123098.sithreon.backend.command;
 import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.networking.Certificate;
+import com.nija123098.sithreon.backend.objects.BuildType;
 import com.nija123098.sithreon.backend.objects.Repository;
-import com.nija123098.sithreon.backend.util.FunctionPair;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.StringUtil;
-import javafx.util.Pair;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -44,40 +45,40 @@ public abstract class Command {
     private static final Map<Class<?>, Object> DEFAULT_MAP = new HashMap<>();
 
     static {
-        registerConversion(String.class, in -> new Pair<>(in, in.length()));
+        registerConversion(String.class, in -> new ImmutablePair<>(in, in.length()));
         registerConversion(Integer.class, in -> {
             in = StringUtil.endAt(in, " ");
             try {
-                return new Pair<>(Integer.valueOf(in.replace("_", "").replace(",", "")), in.length());
+                return new ImmutablePair<>(Integer.valueOf(in.replace("_", "").replace(",", "")), in.length());
             } catch (NumberFormatException e) {
                 return null;
             }
         });
         registerConversion(Repository.class, in -> {
             in = StringUtil.endAt(in, " ");
-            return new Pair<>(Repository.getRepo(in.endsWith("/") ? in.substring(0, in.length() - 1) : in), in.length());
+            return new ImmutablePair<>(Repository.getRepo(in.endsWith("/") ? in.substring(0, in.length() - 1) : in), in.length());
         });
         Set<String> trueReps = new HashSet<>(), falseReps = new HashSet<>();
         Collections.addAll(trueReps, "true", "t", "y", "yes", "1");
         Collections.addAll(falseReps, "false", "f", "n", "no", "0");
         registerConversion(Boolean.class, in -> {
             in = StringUtil.endAt(in, " ");
-            if (trueReps.contains(in)) return new Pair<>(true, in.length());
-            if (falseReps.contains(in)) return new Pair<>(false, in.length());
+            if (trueReps.contains(in)) return new ImmutablePair<>(true, in.length());
+            if (falseReps.contains(in)) return new ImmutablePair<>(false, in.length());
             return null;
         });
         registerConversion(Long.class, in -> {
             in = StringUtil.endAt(in, " ");
-            return new Pair<>(Long.parseLong(in), in.length());
+            return new ImmutablePair<>(Long.parseLong(in), in.length());
         });
         registerConversion(byte[].class, in -> {
             in = StringUtil.endAt(in, " ");
-            return new Pair<>(Base64.getMimeDecoder().decode(in), in.length());
+            return new ImmutablePair<>(Base64.getMimeDecoder().decode(in), in.length());
         });
         registerConversion(PrivateKey.class, in -> {
             in = StringUtil.endAt(in, " ");
             try {
-                return new Pair<>(KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
+                return new ImmutablePair<>(KeyFactory.getInstance("RSA").generatePrivate(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
             } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
                 return null;
             }
@@ -85,12 +86,15 @@ public abstract class Command {
         registerConversion(PublicKey.class, in -> {
             in = StringUtil.endAt(in, " ");
             try {
-                return new Pair<>(KeyFactory.getInstance("RSA").generatePublic(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
+                return new ImmutablePair<>(KeyFactory.getInstance("RSA").generatePublic(new PKCS8EncodedKeySpec(Base64.getMimeDecoder().decode(in))), in.length());
             } catch (InvalidKeySpecException | NoSuchAlgorithmException e) {
                 return null;
             }
         });
-
+        registerConversion(BuildType.class, in -> {
+            in = StringUtil.endAt(in, " ");
+            return new ImmutablePair<>(BuildType.valueOf(in.toUpperCase()), in.length());
+        });
     }
 
     /**
@@ -175,11 +179,10 @@ public abstract class Command {
         String rollingArgs = args;
         for (int i = 0; i < this.argTypes.length; i++) {
             if (this.argTypes[i].isEnum()) {
-                if (rollingArgs.contains(" ")) pair = null;
-                else {
-                    String arg = rollingArgs.substring(0, rollingArgs.indexOf(' '));
-                    pair = new FunctionPair<>(Stream.of(this.argTypes[i].getEnumConstants()).filter(o -> ((Enum<?>) o).name().equalsIgnoreCase(arg)).findFirst().orElse(null), (e) -> e == null ? 0 : ((Enum<?>) e).name().length());
-                }
+                int spaceIndex = rollingArgs.indexOf(' ');
+                String arg = spaceIndex == -1 ? rollingArgs : rollingArgs.substring(0, spaceIndex);
+                Object key = Stream.of(this.argTypes[i].getEnumConstants()).filter(o -> ((Enum<?>) o).name().equalsIgnoreCase(arg)).findFirst().orElse(null);
+                pair = new ImmutablePair<>(key, key == null ? 0 : ((Enum<?>) key).name().length());
             } else {
                 try {
                     Conversion<Object> conversion = CONVERSION_MAP.get(this.argTypes[i]);

@@ -11,9 +11,12 @@ import com.nija123098.sithreon.backend.util.ConnectionUtil;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.game.management.GameAction;
+import com.nija123098.sithreon.game.management.GameArguments;
+import com.nija123098.sithreon.game.management.GameUpdate;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
@@ -28,10 +31,11 @@ public class GameClient extends Machine {
     private final TransferSocket gameServerSocket;
     private final Competitor competitor;
 
-    public GameClient(Competitor competitor) {
+    public GameClient(Competitor competitor, String authCode) {
         this.competitor = competitor;
         try {
             this.gameServerSocket = new TransferSocket(this, Config.gameServerAddress, Config.internalPort);
+            if (authCode != null) this.gameServerSocket.authenticateWithTemporaryCode(authCode);
         } catch (IOException e) {
             ConnectionUtil.throwConnectionException("Unable to establish connection to game server due to IOException", e);
             throw new NoReturnException();
@@ -40,10 +44,12 @@ public class GameClient extends Machine {
     }
 
     @Action(MachineAction.SEND_COMPETITOR_DATA)
-    public void sendCompetitorData(String fileLocation, byte[] data) {
+    public void sendCompetitorData(String fileLocation, byte[] data, TransferSocket socket) {
         try {
-            Files.createDirectories(Paths.get(this.competitor.getRepository().getLocalRepoLocation(), fileLocation).getParent());
-            Files.write(Paths.get(this.competitor.getRepository().getLocalRepoLocation(), fileLocation), data, StandardOpenOption.CREATE);
+            Path path = Paths.get(this.competitor.getRepository().getLocalRepoLocation(), fileLocation);
+            Files.createDirectories(path.getParent());
+            Files.write(path, data, StandardOpenOption.CREATE);
+            socket.write(MachineAction.READY_FOR_NEXT_FILE);
         } catch (IOException e) {
             Log.ERROR.log("Unable to write file " + fileLocation + " in game runner loading for competitor " + this.competitor);
         }
@@ -54,10 +60,14 @@ public class GameClient extends Machine {
         // todo final setup
         this.gameServerSocket.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER);
     }
-    @Action(MachineAction.START_MATCH)
-    public void startMatch() {
-        // todo game logic here
-        this.gameServerSocket.write(MachineAction.GAME_ACTION, GameAction.SURRENDER);
-    }
 
+    @Action(MachineAction.GAME_UPDATE)
+    public void gameUpdate(GameUpdate update, GameArguments gameArguments) {
+        try {
+            Thread.sleep(((Long) gameArguments.getObject(0)) - System.currentTimeMillis());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        this.gameServerSocket.write(MachineAction.GAME_ACTION, GameAction.SURRENDER, new GameArguments());
+    }
 }

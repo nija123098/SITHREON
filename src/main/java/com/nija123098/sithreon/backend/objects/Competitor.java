@@ -1,5 +1,6 @@
 package com.nija123098.sithreon.backend.objects;
 
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
@@ -10,6 +11,7 @@ import java.util.regex.Pattern;
 public class Competitor extends TeamMember {
     private final String matchId;
     private final int teamNumber;
+
     public Competitor(Repository repository, String hash, String matchId, int teamNumber) {
         super(repository, hash);
         this.matchId = matchId;
@@ -23,9 +25,10 @@ public class Competitor extends TeamMember {
     public Competitor(String input) {
         this(input, 0);
     }// This should get me charged for war crimes.
+
     private Competitor(String input, int location) {
-        super(Repository.getRepo(input.substring(0, (location = input.indexOf("#")))), input.substring(location, location + 40));
-        String[] split = input.substring(location + 41).split(Pattern.quote("#"));
+        super(Repository.getRepo(input.substring(0, (location = input.indexOf("#")))), input.substring(location + 1, location + 41));
+        String[] split = input.substring(location + 42).split(Pattern.quote("#"));
         this.matchId = split[0];
         this.teamNumber = Integer.parseInt(split[1]);
     }
@@ -46,5 +49,19 @@ public class Competitor extends TeamMember {
     @Override
     public String toString() {
         return this.getRepository() + "#" + this.getHash() + "#" + this.matchId + "#" + this.teamNumber;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        Competitor that = (Competitor) o;
+        return this.teamNumber == that.teamNumber && this.matchId.equals(that.matchId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), this.matchId, this.teamNumber);
     }
 }

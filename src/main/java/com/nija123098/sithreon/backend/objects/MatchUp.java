@@ -9,8 +9,9 @@ import java.util.stream.Stream;
 
 /**
  * A object representing a list of {@link Lineup}s to battle.
- *
+ * <p>
  * A {@link Match} is a specific version of this.
+ *
  * @see Match
  */
 public class MatchUp {

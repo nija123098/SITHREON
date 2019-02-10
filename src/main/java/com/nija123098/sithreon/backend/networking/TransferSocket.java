@@ -2,7 +2,6 @@ package com.nija123098.sithreon.backend.networking;
 
 import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Machine;
-import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.util.ByteHandler;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.StringUtil;
@@ -59,7 +58,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
     /**
      * The set of one use authentication codes.
      */
-    private final Set<String> CODES = new HashSet<>();
+    private final Set<String> CODES = new TreeSet<>();
 
     /**
      * Gets a single use authentication code.
@@ -67,7 +66,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * @return the code.
      */
     public String getOneUseAuthenticationCode() {
-        byte[] bytes = new byte[256];
+        byte[] bytes = new byte[32];
         RANDOM.nextBytes(bytes);
         String code = StringUtil.base64EncodeOneLine(bytes);
         if (!CODES.add(code)) return getOneUseAuthenticationCode();
@@ -98,6 +97,11 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * The time to compare for authentication for time out due to no authentication.
      */
     private final long authenticationStartTime = System.currentTimeMillis();
+
+    /**
+     * If the {@link Machine} is a higher server then {@link Machine}.
+     */
+    private final boolean masterServerSide;
 
     /**
      * If this instance is closed.
@@ -172,7 +176,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * @throws IOException if the {@link Socket} constructor throws an {@link IOException}.
      */
     public TransferSocket(Machine localMachine, String host, Integer port) throws IOException {
-        this(localMachine, new Socket(host, port));
+        this(localMachine, new Socket(host, port), true);
     }
 
     /**
@@ -182,7 +186,8 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * @param socket       the accepted socket from a {@link SocketAcceptor}.
      * @throws IOException if flushing or a stream throws an {@link IOException}.
      */
-    TransferSocket(Machine localMachine, Socket socket) throws IOException {
+    TransferSocket(Machine localMachine, Socket socket, boolean masterServerSide) throws IOException {
+        this.masterServerSide = masterServerSide;
         this.localMachine = localMachine;
         this.socket = socket;
         this.outputStream = this.socket.getOutputStream();
@@ -221,10 +226,14 @@ public class TransferSocket implements Comparable<TransferSocket> {
                         }
                         pendingBytes.add(buffer, readSize);
                     }
-                    if (packageSize == -1) {// Pet the processing size
-                        if (pendingBytes.size() > Integer.BYTES)
+                    if (packageSize == -1) {// Get the processing size
+                        if (pendingBytes.size() > Integer.BYTES) {
                             packageSize = ObjectSerialization.deserialize(Integer.class, pendingBytes.getBytes(true, Integer.BYTES));
-                        else continue;
+                            pendingBytes.ensureCapacity(packageSize);
+                        } else {
+                            waitForMore = true;
+                            continue;
+                        }
                     }
                     if (pendingBytes.size() >= packageSize) {
                         machineAction = MachineAction.values()[pendingBytes.get(0)];// the first byte determines the action
@@ -346,9 +355,8 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * Closes the wrapped socket.
      */
     public void close() {
-        if (this.closed.get()) return;
+        if (this.closed.getAndSet(true)) return;// Atomic
         this.getLocalMachine().deregisterSocket(this);
-        this.closed.set(true);
         if (this.onCloseReference.get() != null) this.onCloseReference.get().run();
         try {
             this.inputStream.close();
@@ -357,11 +365,16 @@ public class TransferSocket implements Comparable<TransferSocket> {
         } catch (IOException e) {
             Log.ERROR.log("IOException closing socket to " + this.getConnectionName(), e);
         }
-        Log.INFO.log("Closed socket to " + this.getConnectionName());
-        if (!(this.getLocalMachine() instanceof SuperServer)) {
-            Log.INFO.log("Closing machine due to closing connection to the SuperServer");
+        if (this.masterServerSide) {
+            Log.WARN.log("Closing machine due to closing connection to higher server");
             this.getLocalMachine().close();
+        } else {
+            Log.INFO.log("Closed socket to " + this.getConnectionName());
         }
+    }
+
+    public boolean isClosed() {
+        return this.closed.get();
     }
 
     @Action(MachineAction.AFFIRM_NO_AUTHENTICATION)
@@ -389,6 +402,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
         this.allowedMachineActions.add(MachineAction.READY_TO_SERVE);
         this.authenticateThis();
         this.write(MachineAction.AUTHENTICATE_WITH_TEMPORARY_CODE, code);
+        Log.TRACE.log("Authenticating with code " + code.length() + " characters log: " + code);
         this.authenticateOther();
         this.write(MachineAction.READY_TO_SERVE, ManagedMachineType.GAME_RUNNER);
     }
@@ -400,7 +414,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
             this.authenticateThis();// todo restrict permissions on this, a lot.
             this.authenticateOther();
         } else {
-            Log.WARN.log("Temporary code authentication failed");
+            Log.WARN.log("Temporary code authentication failed, received " + code.length() + " characters: " + code);
             this.close();
         }
     }
@@ -413,8 +427,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
     @Action(MachineAction.SEND_CERTIFICATE)
     public void sendCertificate(Certificate certificate) {
         // Certificate is registered in constructor of Certificate, so no action with it directly is required
-        List<Runnable> lock = this.certificateReceiveActions.remove(certificate.getSerialNumber());
-        lock.forEach(Runnable::run);
+        this.certificateReceiveActions.remove(certificate.getSerialNumber()).forEach(Runnable::run);
     }
 
     @Action(MachineAction.IDENTIFY_SELF)
@@ -526,7 +539,8 @@ public class TransferSocket implements Comparable<TransferSocket> {
      * Processes when the other is proven to be authentic.
      */
     private void authenticateThis() {
-        if (this.allowedMachineActions.isEmpty()) Log.ERROR.log("Authenticated but no machine actions have been allowed to other side.");
+        if (this.allowedMachineActions.isEmpty())
+            Log.ERROR.log("Authenticated but no machine actions have been allowed to other side.");
         this.authenticated.set(true);
         if (this.otherAuthenticated.get()) this.mutualAuthentication();
     }

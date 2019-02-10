@@ -2,13 +2,17 @@ package com.nija123098.sithreon.backend;
 
 import com.nija123098.sithreon.backend.machines.SuperServer;
 import com.nija123098.sithreon.backend.objects.*;
+import com.nija123098.sithreon.backend.util.FileUtil;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.*;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -121,11 +125,9 @@ public class Database<K, V> extends HashMap<K, V> {// todo use an actual DB
                     }
                 } catch (IOException e) {
                     try {
-                        if (Files.walk(dataTimeFile, FileVisitOption.FOLLOW_LINKS).sorted(Comparator.reverseOrder()).map(Path::toFile).anyMatch(file -> !file.delete())) {
-                            Log.ERROR.log("Delete failed for a file in " + dataTimeFile.toAbsolutePath());
-                        }
+                        FileUtil.deleteFiles(dataTimeFile);
                     } catch (IOException ex) {
-                        Log.ERROR.log("Could not walk deleting uncompleted files", ex);
+                        Log.ERROR.log("Could not either walk or delete incomplete files for " + dataTimeFile.toAbsolutePath(), ex);
                     }
                     Log.ERROR.log("Could not complete writing database", e);
                 }

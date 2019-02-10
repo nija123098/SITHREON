@@ -102,8 +102,12 @@ public class Match extends MatchUp implements Comparable<Match> {
         return new MatchUp(new ArrayList<>(this.teams));
     }
 
+    private byte[] matchHash() {
+        return StringUtil.getSha256Hash(this.toString());
+    }
+
     public List<Competitor> getCompetitors() {
-        String matchId = StringUtil.getSha256Hash(this.toString());// Makes it shorter
+        String matchId = StringUtil.base64EncodeOneLine(this.matchHash());// Makes it shorter
         return this.teams.stream().flatMap(team -> team.getMembers().stream()).map(teamMember -> new Competitor(teamMember.getRepository(), teamMember.getHash(), matchId, teamMember.getTeamNumber())).collect(Collectors.toList());
     }
 

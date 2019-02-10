@@ -45,11 +45,12 @@ public class MachineCommand extends Command {
             case "code runner":
             case "runner":
             case "r":
-                new GameClient(null);
+                new GameClient(null, null);
                 break;
             case "command":
             case "command client":
                 new CommandClient();
+                break;
             default:
                 Log.ERROR.log("Unrecognized machine type: " + type);
         }

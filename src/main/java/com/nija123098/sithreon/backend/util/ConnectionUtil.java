@@ -9,6 +9,7 @@ import com.nija123098.sithreon.backend.util.throwable.connection.SpecificConnect
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -19,19 +20,31 @@ import java.util.stream.Stream;
 public class ConnectionUtil {
 
     /**
+     * Checks if there is a host reachable by the given hostname.
+     *
+     * @param host the hostname.
+     * @return if the host is reachable.
+     */
+    private static boolean checkConnection(String host) {
+        try {
+            InetAddress address = InetAddress.getByName(host);
+            if (address.isReachable(null, 0, 500)) return true;
+            return new Socket(address, 80).isBound();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * Check if the program has a connection to common servers.
      *
      * @return if the program has a connection to common servers.
      */
     public static boolean hasGeneralConnection() {
         return Stream.of(Config.standardAccessibleDomains.split(Pattern.quote(","))).map(String::trim).parallel().noneMatch(s -> {
-            try {
-                boolean b = !InetAddress.getByName(s).isReachable(5_000);
-                if (b) Log.WARN.log("Unable to connect to " + s);
-                return b;
-            } catch (IOException e) {
-                return true;
-            }
+            boolean b = !checkConnection(s);
+            if (b) Log.WARN.log("Unable to connect to " + s);
+            return b;
         });
     }
 

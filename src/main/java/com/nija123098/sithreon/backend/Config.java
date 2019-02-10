@@ -76,7 +76,7 @@ public class Config {
     /**
      * The password for the key store.
      */
-    public static char[] keyStorePassword = new char[0];
+    public static char[] keyStorePassword;
 
     // NETWORKING
 
@@ -88,7 +88,7 @@ public class Config {
     /**
      * The address of the game server.
      */
-    public static String gameServerAddress;
+    public static String gameServerAddress = "127.0.0.1";
 
     /**
      * The port to communicate externally on.
@@ -103,7 +103,7 @@ public class Config {
     /**
      * The priority this client has to serve a server.
      */
-    public static Integer priority;
+    public static Integer priority = 0;
 
     /**
      * The comma separated list of domains or domains to check if dependent connections are up.
@@ -113,7 +113,7 @@ public class Config {
     /**
      * If connection should use secure protocols.
      */
-    public static Boolean useSecure;
+    public static Boolean useSecure = true;
 
     // INTERNAL
 
@@ -132,6 +132,11 @@ public class Config {
      */
     public static Log logLevel = Log.TRACE;
 
+    /**
+     * The milliseconds between each repository check.
+     */
+    public static Long checkInterval = 30_000L;
+
     // GAME
 
     public static Class<? extends GameRules> gameRules = DefaultGameRules.class;
@@ -139,9 +144,13 @@ public class Config {
     // MISCELLANEOUS
 
     /**
-     * If the config should be deleted on startup.
+     * If the machine should check repository validity.
+     * <p>
+     * Generally this should not be touched.
      */
-    private static Boolean removeConfig = false;
+    public static Boolean checkRepositoryValidity = true;
+
+    // END OF CONFIGS
 
     /**
      * The function map for converting simple values to
@@ -230,8 +239,8 @@ public class Config {
 
     static {
         FUNCTION_MAP.put(String.class, (s) -> s);
-        FUNCTION_MAP.put(Integer.class, Integer::parseInt);
-        FUNCTION_MAP.put(Long.class, Long::valueOf);
+        FUNCTION_MAP.put(Integer.class, s -> Integer.parseInt(s.replace("_", "")));
+        FUNCTION_MAP.put(Long.class, s -> Long.parseLong(s.replace("_", "")));
         FUNCTION_MAP.put(Log.class, Log::valueOf);
         FUNCTION_MAP.put(Boolean.class, Boolean::valueOf);
         FUNCTION_MAP.put(byte[].class, s -> Base64.getMimeDecoder().decode(s));
@@ -255,7 +264,7 @@ public class Config {
                 throw new NoReturnException();
             }
         });
-        FUNCTION_MAP.put(MachineAction[].class, s -> Stream.of(s.split(Pattern.quote(","))).map(MachineAction::valueOf).toArray(MachineAction[]::new));
+        FUNCTION_MAP.put(MachineAction[].class, s -> s.equalsIgnoreCase("all") ? MachineAction.values() : Stream.of(s.split(Pattern.quote(","))).map(MachineAction::valueOf).toArray(MachineAction[]::new));
         FUNCTION_MAP.put(GameRules.class, s -> {
             try {
                 return new URLClassLoader(new URL[]{new URL(s)}).loadClass(s.substring(s.lastIndexOf(File.separator), s.lastIndexOf('.')));
@@ -268,19 +277,12 @@ public class Config {
             }
             throw new NoReturnException();
         });
-        try {
+        if (!Files.exists(CONFIG_PATH)) {
+            Log.WARN.log("No config file provided");
+        } else try {
             setValues(Config.class, Files.readAllLines(CONFIG_PATH));
         } catch (Exception e) {
-            Log.ERROR.log("Unable to read config file", e);
-        }
-        if (Config.removeConfig) try {
-            long size = Files.size(CONFIG_PATH);
-            if (size > Integer.MAX_VALUE)
-                Log.ERROR.log("Config file too large to write zeros too in the current version");
-            Files.write(CONFIG_PATH, new byte[(int) size]);// write 0s
-            Files.delete(CONFIG_PATH);
-        } catch (IOException e) {
-            Log.ERROR.log("IOException removing config file", e);
+            Log.WARN.log("Unable to read config file", e);
         }
     }
 }

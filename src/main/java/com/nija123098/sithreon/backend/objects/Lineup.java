@@ -9,6 +9,7 @@ import java.util.stream.Stream;
 
 /**
  * Represents a list of {@link Repository} instances with no version.
+ *
  * @see Team
  */
 public class Lineup implements Comparable<Lineup> {
@@ -50,7 +51,7 @@ public class Lineup implements Comparable<Lineup> {
 
     @Override
     public String toString() {
-        return StringUtil.join("+", getRepositories().stream().toArray(String[]::new));
+        return StringUtil.join("+", getRepositories().stream().map(Repository::toString).toArray(String[]::new));
     }
 
     @Override

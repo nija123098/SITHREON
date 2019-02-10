@@ -10,7 +10,9 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.BufferedInputStream;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
+import java.util.NoSuchElementException;
 import java.util.Scanner;
+import java.util.regex.Pattern;
 
 /**
  * Handles {@link Command} initialization and command invocation.
@@ -63,8 +65,10 @@ public class CommandHandler {
             String arg = null;
             while (true) {
                 try {
-                    arg = SCANNER.nextLine();
-                    if (!arg.trim().isEmpty()) COMMAND_MAP.invokeCommand(arg, false);
+                    arg = SCANNER.nextLine().trim();
+                    COMMAND_MAP.invokeCommand(arg, false);
+                } catch (NoSuchElementException e) {
+                    return;// Return if System.in is closed.
                 } catch (Exception e) {
                     Log.WARN.log("Caught exception attempting to invoke command: " + arg, e);
                 }
@@ -113,7 +117,7 @@ public class CommandHandler {
             if (name.length == nameIndex) {
                 if (this.command != null) {
                     Log.WARN.log("Registering with name " + StringUtil.join(" ", name) + " over command " + this.command.getClass().getName() + " with " + command.getClass().getName());
-                }
+                }// WARN level for loading custom commands
                 this.command = command;
             } else {
                 this.computeIfAbsent(name[nameIndex], (n) -> new CommandMap<>()).putCommand(command, ++nameIndex, name);
@@ -128,7 +132,8 @@ public class CommandHandler {
          */
         private void invokeCommand(String args, boolean fatal) {
             args = args.trim();
-            String[] split = StringUtil.removeRepeats(args, ' ').split(" ");
+            if (args.isEmpty()) return;
+            String[] split = StringUtil.removeRepeats(args, ' ').split(Pattern.quote(" "));
             Command command = null;
             CommandMap<E> map = this;
             int nameLength = 0;

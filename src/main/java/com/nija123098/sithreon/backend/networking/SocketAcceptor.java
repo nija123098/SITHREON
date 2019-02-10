@@ -40,7 +40,7 @@ public class SocketAcceptor {
                 try {
                     Socket socket = this.serverSocket.accept();// will not throw an NPE
                     if (this.closed.get()) return;// Ensure that this socket is not accepted while this is closed
-                    this.sockets.add(new TransferSocket(machine, socket));
+                    this.sockets.add(new TransferSocket(machine, socket, false));
                 } catch (IOException e) {
                     Log.WARN.log("IOException accepting socket", e);
                 }

@@ -8,3 +8,4 @@ repos/
 *.log
 *.jks
 dependency-reduced-pom.xml
+*.tar.gz

@@ -4,7 +4,10 @@ import com.nija123098.sithreon.backend.Config;
 import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.networking.*;
-import com.nija123098.sithreon.backend.objects.*;
+import com.nija123098.sithreon.backend.objects.Lineup;
+import com.nija123098.sithreon.backend.objects.Match;
+import com.nija123098.sithreon.backend.objects.PriorityLevel;
+import com.nija123098.sithreon.backend.objects.Repository;
 import com.nija123098.sithreon.backend.util.DualPriorityResourceManager;
 import com.nija123098.sithreon.backend.util.Log;
 import com.nija123098.sithreon.backend.util.ThreadMaker;
@@ -99,7 +102,7 @@ public class SuperServer extends Machine {
             } catch (Exception t) {
                 Log.WARN.log("Exception checking if repository was up to date: " + repository.toString(), t);
             }
-        }, 1, 1, TimeUnit.MINUTES);
+        }, Config.checkInterval, Config.checkInterval, TimeUnit.MILLISECONDS);
         this.runOnClose(executorService::shutdownNow);
     }
 
@@ -128,13 +131,14 @@ public class SuperServer extends Machine {
         Database.REPO_LAST_HEAD_HASH.put(repository, hash);
         Database.REPO_APPROVAL.put(repository, result);
         socket.setOnClose(null);
-        if (result) {// validate repo
+        if (!result) Log.INFO.log("Repository " + repository + " failed test: " + report);
+        else {
+            Log.INFO.log("Repository " + repository + " of hash " + hash + " passed code inspection: " + report);
             this.approvedRepos.add(repository);
             List<Match> matches = this.gameRules.getMatches(this.approvedRepos, repository);
             Database.MATCHES_TO_DO.putAll(matches.stream().collect(Collectors.toMap(Function.identity(), i -> true)));
             matches.forEach(this.gameRunnerResourceManager::giveFirst);
-            Log.INFO.log("Repository " + repository + " of hash " + hash + " passed code inspection: " + report);
-        } else Log.INFO.log("Repository " + repository + " failed test: " + report);
+        }
     }
 
     /**

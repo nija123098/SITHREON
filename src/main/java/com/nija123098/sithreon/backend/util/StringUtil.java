@@ -107,12 +107,12 @@ public class StringUtil {
     }
 
     /**
-     * Hashes a string's content by SHA-256 and returns the Base 64 for it.
+     * Hashes a string's content by SHA-256 and returns the bytes.
      *
      * @param input the string to hash.
-     * @return the SHA-256 of the hash in base 64.
+     * @return the SHA-256 of the hash bytes.
      */
-    public static String getSha256Hash(String input) {
-        return base64EncodeOneLine(MESSAGE_DIGEST.digest(input.getBytes(StandardCharsets.UTF_8)));
+    public static byte[] getSha256Hash(String input) {
+        return MESSAGE_DIGEST.digest(input.getBytes(StandardCharsets.UTF_8));
     }
 }

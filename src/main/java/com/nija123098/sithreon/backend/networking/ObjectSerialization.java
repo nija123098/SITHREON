@@ -132,7 +132,8 @@ public class ObjectSerialization {
             return (E) array;
         } else {
             function = (Function<byte[], E>) TO_OBJECT.get(type);
-            if (function == null) Log.ERROR.log("ObjectSerialization does not support type: " + type, new SithreonException("No serialization support for " + type));
+            if (function == null)
+                Log.ERROR.log("ObjectSerialization does not support type: " + type, new SithreonException("No serialization support for " + type));
             return function.apply(bytes);
         }
     }
