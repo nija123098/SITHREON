@@ -97,13 +97,4 @@ public class ConnectionUtil {
             throw new NoReturnException();
         }
     }
-
-    /**
-     * Gets the external connection protocol name to use.
-     *
-     * @return the external protocol name to use.
-     */
-    public static String getExternalProtocolName() {
-        return Config.useSecure ? "https" : "http";
-    }
 }

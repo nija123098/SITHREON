@@ -79,7 +79,7 @@ public enum BuildType {
                 Files.createDirectories(path);
                 Files.write(Paths.get(buildPath, "Dockerfile"), Collections.singletonList(this.getDockerfileText()));
                 Files.write(Paths.get(buildPath, "run.sh"), Arrays.asList("sleep 15", "java -jar sithreon.jar gc $COMPETITOR $AUTH_CODE"));
-                Files.write(Paths.get(buildPath, "config.cfg"), Arrays.asList("gameServerAddress=" + Config.gameServerAddress, "internalPort=" + +Config.internalPort, "authenticateMachines=" + Config.authenticateMachines, "checkRepositoryValidity=false", "useSecure=" + Config.useSecure, "machineId=" + Config.machineId + "-runner", "standardAccessibleDomains=" + Config.gameServerAddress), StandardOpenOption.CREATE);
+                Files.write(Paths.get(buildPath, "config.cfg"), Arrays.asList("gameServerAddress=" + Config.gameServerAddress, "internalPort=" + +Config.internalPort, "authenticateMachines=" + Config.authenticateMachines, "checkRepositoryValidity=false", "machineId=" + Config.machineId + "-runner", "standardAccessibleDomains=" + Config.gameServerAddress), StandardOpenOption.CREATE);
                 Files.copy(Paths.get(FileUtil.getSithreonLocation()), Paths.get(buildPath, "sithreon.jar"), StandardCopyOption.REPLACE_EXISTING);
                 Process process = new ProcessBuilder("docker", "build", "--tag", this.imageName, "--force-rm", buildPath).start();
                 process.waitFor();

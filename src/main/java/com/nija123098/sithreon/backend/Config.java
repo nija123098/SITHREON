@@ -110,11 +110,6 @@ public class Config {
      */
     public static String standardAccessibleDomains;
 
-    /**
-     * If connection should use secure protocols.
-     */
-    public static Boolean useSecure = true;
-
     // INTERNAL
 
     /**

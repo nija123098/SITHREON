@@ -5,6 +5,7 @@ import com.nija123098.sithreon.backend.Database;
 import com.nija123098.sithreon.backend.Machine;
 import com.nija123098.sithreon.backend.machines.CheckClient;
 import com.nija123098.sithreon.backend.util.*;
+import com.nija123098.sithreon.backend.util.throwable.IOExceptionWrapper;
 import com.nija123098.sithreon.backend.util.throwable.InvalidRepositoryException;
 import com.nija123098.sithreon.backend.util.throwable.NoReturnException;
 import com.nija123098.sithreon.backend.util.throwable.SithreonException;
@@ -14,6 +15,9 @@ import com.nija123098.sithreon.backend.util.throwable.connection.SpecificConnect
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -73,8 +77,9 @@ public class Repository implements Comparable<Repository> {
      * @return if the repository exists.
      */
     public boolean isValid() {
+        if (this.repo.startsWith("/")) return Files.exists(Paths.get(this.repo, ".git"));
         try {// Domains with repositories should be general connections
-            if (!ConnectionUtil.pageExists(ConnectionUtil.getExternalProtocolName() + "://" + this.repo) || this.getHeadHash() == null)
+            if (!ConnectionUtil.pageExists(this.repo) || this.getHeadHash() == null)
                 return false;// invalid repository
         } catch (SpecificConnectionException e) {
             e.printStackTrace();
@@ -116,7 +121,7 @@ public class Repository implements Comparable<Repository> {
             Log.ERROR.log("Unexpected interruption running git init", e);
         }
         try {
-            Process fetchProcess = new ProcessBuilder("git", "fetch", "--quiet", "--depth", "1", ConnectionUtil.getExternalProtocolName() + "://" + this.repo, hash).directory(location).start();
+            Process fetchProcess = new ProcessBuilder("git", "fetch", "--quiet", "--depth", "1", this.repo, hash).directory(location).start();
             if (ProcessUtil.waitOrDestroy(FETCH_TIME, fetchProcess))
                 ConnectionUtil.throwConnectionException("Timeout for git fetch " + this.repo + " " + hash + ": " + StreamUtil.readFully(fetchProcess.getErrorStream(), 1024));
             ProcessUtil.runNonZero(fetchProcess, exitCode -> new SithreonException("Unable to fetch for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(fetchProcess.getErrorStream())));
@@ -170,8 +175,17 @@ public class Repository implements Comparable<Repository> {
      * @return the {@link RepositoryConfig} for this repository.
      */
     public RepositoryConfig getRepositoryConfig() {
-        String page = ConnectionUtil.getExternalProtocolName() + "://" + this.repo + "/raw/HEAD/config.cfg";
-        if (ConnectionUtil.pageExists(page)) return new RepositoryConfig(StringUtil.readRaw(page));
+        String page = this.repo + "/raw/HEAD/config.cfg";
+        if (this.repo.startsWith("/")) {
+            Path path = Paths.get(page);
+            if (Files.exists(path)) {
+                try {
+                    return new RepositoryConfig(Files.readAllLines(path));
+                } catch (IOException e) {
+                    throw new IOExceptionWrapper(e);
+                }
+            }
+        } else if (ConnectionUtil.pageExists(page)) return new RepositoryConfig(StringUtil.readRaw(page));
         return new RepositoryConfig(Collections.emptyList());
     }
 
@@ -183,7 +197,7 @@ public class Repository implements Comparable<Repository> {
     public String getHeadHash() {
         Process process;
         try {
-            process = new ProcessBuilder("git", "ls-remote", ConnectionUtil.getExternalProtocolName() + "://" + this.repo, "HEAD").start();
+            process = new ProcessBuilder("git", "ls-remote", this.repo, "HEAD").start();
         } catch (IOException e) {
             ConnectionUtil.throwConnectionException("Unable to connect to git repository", e);
             throw new NoReturnException();

@@ -163,7 +163,7 @@ public class GameServer extends Machine {
 
         private ContainerProcess(GameServer gameServer, Competitor competitor, GameRules gameRules, OutputStream output, OutputStream error) {
             this.containerName = competitor.getMatchId().replace('+', '-').replace('/', '_').replace('=', '-') + competitor.getTeamNumber();// match ID contains padding (=), but '=' can't be part of a container name.
-            List<String> strings = new ArrayList<>(Arrays.asList("docker", "run", "--name", this.containerName, "--rm", "--no-healthcheck", "-e", "COMPETITOR=" + competitor, "-e", "REPOSITORY_URL=" + ConnectionUtil.getExternalProtocolName() + "://" + competitor.getRepository(), "-e", "AUTH_CODE=" + gameServer.superServerSocket.getOneUseAuthenticationCode()));
+            List<String> strings = new ArrayList<>(Arrays.asList("docker", "run", "--name", this.containerName, "--rm", "--no-healthcheck", "-e", "COMPETITOR=" + competitor, "-e", "AUTH_CODE=" + gameServer.superServerSocket.getOneUseAuthenticationCode()));
             strings.addAll(gameRules.getDockerRules(competitor));
             strings.add(competitor.getRepository().getRepositoryConfig().buildType.getContainer());
             String joinedArgs = StringUtil.join(" ", strings.toArray(new String[0]));
