@@ -110,6 +110,28 @@ public class Config {
      */
     public static String standardAccessibleDomains;
 
+    // FILE FOLDERS
+
+    /**
+     * Folder for logs.
+     */
+    public static String logFolder = "log";
+
+    /**
+     * Folder for repository storage.
+     */
+    public static String repositoryFolder = "repos";
+
+    /**
+     * Folder for text database.
+     */
+    public static String dataFolder = "data";
+
+    /**
+     * Folder for ephemeral files.
+     */
+    public static String tmpFolder = Files.exists(Paths.get("/dev/shm")) ? "/dev/shm" : "tmp";
+
     // INTERNAL
 
     /**

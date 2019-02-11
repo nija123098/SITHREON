@@ -92,7 +92,7 @@ public class Database<K, V> extends HashMap<K, V> {// todo use an actual DB
      * Initializes the database by loading and setting up automatic saving.
      */
     public static void init() {
-        Path dataFile = Paths.get("data");// The root data path
+        Path dataFile = Paths.get(Config.dataFolder);// The root data path
 
         File[] files = dataFile.toFile().listFiles();
         Optional<Long> lastDataTime = Stream.of(files == null ? new File[0] : files).map(file -> Long.parseLong(file.getName())).reduce(Math::max);
@@ -198,7 +198,7 @@ public class Database<K, V> extends HashMap<K, V> {// todo use an actual DB
      * @return the {@link Path} of the {@link Database} save file.
      */
     private Path getPath(long time) {
-        return Paths.get("data", Long.toString(time), this.name.toLowerCase() + ".txt");
+        return Paths.get(Config.dataFolder, Long.toString(time), this.name + ".txt");
     }
 
     /**

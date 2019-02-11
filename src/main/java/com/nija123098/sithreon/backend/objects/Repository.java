@@ -166,7 +166,7 @@ public class Repository implements Comparable<Repository> {
      * @return the location of the repository, or where it would be if it were cloned.
      */
     public String getLocalRepoLocation() {
-        return "repos" + File.separator + this.repo.replace('/', File.separatorChar);
+        return Config.repositoryFolder + File.separator + this.repo.replace('/', File.separatorChar);
     }
 
     /**

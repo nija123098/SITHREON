@@ -74,7 +74,7 @@ public enum BuildType {
             if (this.isImageBuilt()) return;
             try {
                 Log.INFO.log("Building Docker container: " + this.imageName);
-                String buildPath = "tmp/image/" + this.imageName + "/";
+                String buildPath = Config.tmpFolder + "/sithreon/runner/image/" + this.imageName + "/";
                 Path path = Paths.get(buildPath);
                 Files.createDirectories(path);
                 Files.write(Paths.get(buildPath, "Dockerfile"), Collections.singletonList(this.getDockerfileText()));
@@ -87,6 +87,7 @@ public enum BuildType {
                     Log.ERROR.log("Failed build for container: " + this.imageName + "\n" + StreamUtil.readFully(process.getInputStream(), 4096));
                 }
                 Log.INFO.log("Completed building Docker container: " + this.imageName);
+                FileUtil.deleteFiles(path);
             } catch (IOException e) {
                 throw new SithreonException("IOException building docker existence: " + this.imageName, e);
             } catch (InterruptedException e) {
