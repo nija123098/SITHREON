@@ -13,6 +13,7 @@ import java.nio.channels.FileLock;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -173,5 +174,26 @@ public class FileUtil {
             Log.ERROR.log("Unable to get file path", e);
             throw new NoReturnException();
         }
+    }
+
+    /**
+     * If the path points to a local path or directory.
+     *
+     * @param s the path to check.
+     * @return if the path is local.
+     */
+    public static boolean isLocalPath(String s) {
+        return s.startsWith("/") || (Character.isAlphabetic(s.charAt(0)) && Character.isUpperCase(s.charAt(0)) && s.charAt(1) == ':' && s.charAt(2) == '\\') || !s.contains(":") || (s.indexOf(":") > (s.indexOf('/') == -1 ? s.indexOf('\\') : s.indexOf("/")));
+    }
+
+    /**
+     * Returns a plausible temporary directory.
+     * <p>
+     * {@link Config#tmpDirectory}
+     *
+     * @return the temporary directory to use.
+     */
+    public static String getTemporaryDirectory() {
+        return (Files.exists(Paths.get("/dev/shm/")) ? "/dev/shm/sithreon/" : "tmp/sithreon/").replace("/", File.separator);
     }
 }

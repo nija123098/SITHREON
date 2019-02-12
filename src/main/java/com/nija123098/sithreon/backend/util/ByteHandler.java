@@ -49,12 +49,15 @@ public class ByteHandler extends ArrayList<Byte> {
     }
 
     /**
-     * Gets the bytes of the buffer instance in a range.
+     * Gets the bytes of the buffer instance from source to the length number of bytes.
+     * <p>
+     * Note the length is effectively the end point inclusive,
+     * but is only meant to be the length of bytes to read.
      *
      * @param remove if the gotten bytes should be
      *               removed from this buffer.
      * @param source the starting index to start getting bytes from.
-     * @param length the number of bytes to get.
+     * @param length the number of bytes to get, not the end point.
      * @return the bytes gotten.
      */
     public byte[] getBytes(boolean remove, int source, int length) {

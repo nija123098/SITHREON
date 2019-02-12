@@ -35,14 +35,14 @@ public class ProcessUtil {
      * @return the exit code of the process.
      * @throws IOException the IO exception if occured in the provided {@link ExitConsumer}.
      */
-    public static int runNonZero(Process process, ExitConsumer runnable) throws IOException {
+    public static int throwNonZero(Process process, ExitConsumer runnable) throws IOException {
         int exitCode = process.exitValue();
-        if (exitCode == 0) return 0;
-        throw runnable.accept(exitCode);
+        if (exitCode != 0) runnable.accept(exitCode);
+        return exitCode;
     }
 
     @FunctionalInterface
     public interface ExitConsumer {
-        RuntimeException accept(int exitCode) throws IOException;
+        void accept(int exitCode) throws IOException;
     }
 }

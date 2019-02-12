@@ -2,6 +2,7 @@ package com.nija123098.sithreon.backend.util;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A simple utility to keep the program alive.
@@ -9,11 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author nija123098
  */
 public class KeepAliveUtil {
+    private static final AtomicBoolean IS_ALIVE = new AtomicBoolean(false);
     private static final Object LOCK = new Object();
     private static final Set<Object> LIVING_OBJECTS = ConcurrentHashMap.newKeySet();
 
     public static void start(Object living) {
-        if (LIVING_OBJECTS.isEmpty()) {
+        if (LIVING_OBJECTS.isEmpty() && !IS_ALIVE.getAndSet(!IS_ALIVE.get())) {
             ThreadMaker.getThread(ThreadMaker.BACKEND, "Keep Alive Thread", false, () -> {
                 synchronized (LOCK) {
                     try {

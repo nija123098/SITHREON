@@ -74,7 +74,7 @@ public enum BuildType {
             if (this.isImageBuilt()) return;
             try {
                 Log.INFO.log("Building Docker container: " + this.imageName);
-                String buildPath = Config.tmpFolder + "/sithreon/runner/image/" + this.imageName + "/";
+                String buildPath = Config.tmpDirectory + "sithreon/runner/image/" + this.imageName + "/";
                 Path path = Paths.get(buildPath);
                 Files.createDirectories(path);
                 Files.write(Paths.get(buildPath, "Dockerfile"), Collections.singletonList(this.getDockerfileText()));

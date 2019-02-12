@@ -39,7 +39,7 @@ public class ObjectSerialization {
     private static final Map<Class<?>, Function<?, byte[]>> TO_BYTES = new HashMap<>();
 
     static {
-        registerSerialization(Long.class, (aLong -> ByteBuffer.allocate(Long.BYTES).putLong(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Long.BYTES).put(bytes).flip()).asLongBuffer().get()));
+        registerSerialization(Long.class, (aLong -> ByteBuffer.allocate(Long.BYTES).putLong(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Long.BYTES).put(bytes).flip()).asLongBuffer().get()));// 2's complement
         registerSerialization(Integer.class, (aLong -> ByteBuffer.allocate(Integer.BYTES).putInt(aLong).array()), (bytes -> ((ByteBuffer) ByteBuffer.allocate(Integer.BYTES).put(bytes).flip()).asIntBuffer().get()));
         registerSerialization(String.class, s -> s.getBytes(StandardCharsets.UTF_8), bytes -> new String(bytes, Charset.forName("UTF-8")));
         registerStringSerialization(Repository.class, Repository::toString, Repository::getRepo);

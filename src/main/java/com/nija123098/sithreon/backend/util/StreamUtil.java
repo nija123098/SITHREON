@@ -54,12 +54,14 @@ public class StreamUtil {
             try {
                 while ((size = input.read(buffer)) != -1) {
                     output.write(buffer, 0, size);
+                    output.flush();
                 }
+                System.out.println("k");
             } catch (IOException e) {
                 Log.ERROR.log("IOException reading stream fully for thread: " + threadName, e);
             }
         }, threadName);
-        thread.setDaemon(true);
+        thread.setDaemon(false);
         thread.start();
         return thread;
     }

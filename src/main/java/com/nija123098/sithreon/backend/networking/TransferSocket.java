@@ -229,7 +229,7 @@ public class TransferSocket implements Comparable<TransferSocket> {
                     if (packageSize == -1) {// Get the processing size
                         if (pendingBytes.size() > Integer.BYTES) {
                             packageSize = ObjectSerialization.deserialize(Integer.class, pendingBytes.getBytes(true, Integer.BYTES));
-                            pendingBytes.ensureCapacity(packageSize);
+                            pendingBytes.ensureCapacity(Math.min(packageSize, Integer.MAX_VALUE / 1000));// Just over 2MB
                         } else {
                             waitForMore = true;
                             continue;

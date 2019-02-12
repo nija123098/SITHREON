@@ -98,6 +98,8 @@ public class DualPriorityResourceManager<F, S> {
 
     /**
      * Gets the list of waiting first type instances.
+     * <p>
+     * Returns the list it's self, not a copy.
      *
      * @return the list of waiting first type instances.
      */
@@ -107,10 +109,38 @@ public class DualPriorityResourceManager<F, S> {
 
     /**
      * Gets the list of waiting second type instances.
+     * <p>
+     * Returns the list it's self, not a copy.
      *
      * @return the list of waiting second type instances.
      */
     public Collection<S> getSecondWaiting() {
         return this.secondWaiting;
+    }
+
+    /**
+     * Gets if there are no primary resources in queue.
+     *
+     * @return if there are no primary resources in queue.
+     */
+    public boolean isFirstEmpty() {
+        return this.firstWaiting.isEmpty();
+    }
+
+    /**
+     * Gets if there are no secondary resources in queue.
+     *
+     * @return if there are no secondary resources in queue.
+     */
+    public boolean isSecondEmpty() {
+        return this.secondWaiting.isEmpty();
+    }
+
+    /**
+     * Clears all waiting queues.
+     */
+    public void clear() {
+        this.firstWaiting.clear();
+        this.secondWaiting.clear();
     }
 }

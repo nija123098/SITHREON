@@ -59,8 +59,8 @@ public enum Log {
 
     /**
      * The {@link Path} to save the log file to.
-     */
-    private static final Path LOG_PATH = Paths.get(Config.logFolder, new SimpleDateFormat("MM-dd-yy__HH-mm-ss_SSS").format(new Date()) + ".log").toAbsolutePath();
+     */// TODO sort loading order to properly load log destination
+    private static final Path LOG_PATH = Paths.get("log", new SimpleDateFormat("MM-dd-yy__HH-mm-ss_SSS").format(new Date()) + ".log");
 
     static {
         try {

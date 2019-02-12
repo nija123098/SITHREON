@@ -110,27 +110,27 @@ public class Config {
      */
     public static String standardAccessibleDomains;
 
-    // FILE FOLDERS
+    // FILE DIRECTORIES
 
     /**
-     * Folder for logs.
+     * Directory for logs.
      */
-    public static String logFolder = "log";
+    public static String logDirectory = "log" + File.separator;
 
     /**
-     * Folder for repository storage.
+     * Directory for repository storage.
      */
-    public static String repositoryFolder = "repos";
+    public static String repositoryDirectory = "repos" + File.separator;
 
     /**
-     * Folder for text database.
+     * Directory for text database.
      */
-    public static String dataFolder = "data";
+    public static String dataDirectory = "data";
 
     /**
-     * Folder for ephemeral files.
+     * Directory for ephemeral files.
      */
-    public static String tmpFolder = Files.exists(Paths.get("/dev/shm")) ? "/dev/shm" : "tmp";
+    public static String tmpDirectory = (Files.exists(Paths.get("/dev/shm")) ? "/dev/shm/" : "tmp/").replace("/", File.separator);
 
     // INTERNAL
 
@@ -299,6 +299,7 @@ public class Config {
         } else try {
             setValues(Config.class, Files.readAllLines(CONFIG_PATH));
         } catch (Exception e) {
+            System.out.println(CONFIG_PATH);
             Log.WARN.log("Unable to read config file", e);
         }
     }

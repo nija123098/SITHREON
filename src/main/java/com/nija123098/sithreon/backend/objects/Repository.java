@@ -77,7 +77,7 @@ public class Repository implements Comparable<Repository> {
      * @return if the repository exists.
      */
     public boolean isValid() {
-        if (this.repo.startsWith("/")) return Files.exists(Paths.get(this.repo, ".git"));
+        if (FileUtil.isLocalPath(this.repo)) return Files.exists(Paths.get(this.repo, ".git"));
         try {// Domains with repositories should be general connections
             if (!ConnectionUtil.pageExists(this.repo) || this.getHeadHash() == null)
                 return false;// invalid repository
@@ -114,7 +114,7 @@ public class Repository implements Comparable<Repository> {
             Process initProcess = new ProcessBuilder("git", "init", "--quiet").directory(location).start();
             if (ProcessUtil.waitOrDestroy(1_000, initProcess))
                 ConnectionUtil.throwConnectionException("Timeout for git init git at: " + location.getAbsolutePath());
-            ProcessUtil.runNonZero(initProcess, exitCode -> new SithreonException("Unable to init git repo: " + exitCode));
+            ProcessUtil.throwNonZero(initProcess, exitCode -> new SithreonException("Unable to init git repo: " + exitCode));
         } catch (IOException e) {
             Log.ERROR.log("IOException running git init", e);
         } catch (InterruptedException e) {
@@ -124,7 +124,7 @@ public class Repository implements Comparable<Repository> {
             Process fetchProcess = new ProcessBuilder("git", "fetch", "--quiet", "--depth", "1", this.repo, hash).directory(location).start();
             if (ProcessUtil.waitOrDestroy(FETCH_TIME, fetchProcess))
                 ConnectionUtil.throwConnectionException("Timeout for git fetch " + this.repo + " " + hash + ": " + StreamUtil.readFully(fetchProcess.getErrorStream(), 1024));
-            ProcessUtil.runNonZero(fetchProcess, exitCode -> new SithreonException("Unable to fetch for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(fetchProcess.getErrorStream())));
+            ProcessUtil.throwNonZero(fetchProcess, exitCode -> new SithreonException("Unable to fetch for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(fetchProcess.getErrorStream())));
         } catch (IOException e) {
             ConnectionUtil.throwConnectionException("Unable to complete git fetch: " + this.repo + " " + hash, e);
         } catch (InterruptedException e) {
@@ -134,7 +134,7 @@ public class Repository implements Comparable<Repository> {
             Process checkoutProcess = new ProcessBuilder("git", "checkout", "--quiet", hash).directory(location).start();
             if (ProcessUtil.waitOrDestroy(FETCH_TIME, checkoutProcess))
                 ConnectionUtil.throwConnectionException("Timeout for git checkout " + this.repo + " " + hash + ": " + StreamUtil.readFully(checkoutProcess.getErrorStream(), 1024));
-            ProcessUtil.runNonZero(checkoutProcess, exitCode -> new SithreonException("Unable to checkout for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(checkoutProcess.getErrorStream())));
+            ProcessUtil.throwNonZero(checkoutProcess, exitCode -> new SithreonException("Unable to checkout for repository git repo: " + this.repo + " " + hash + ": " + exitCode + " " + StreamUtil.readFully(checkoutProcess.getErrorStream())));
         } catch (IOException e) {
             ConnectionUtil.throwConnectionException("Unable to complete git checkout: " + this.repo + " " + hash, e);
         } catch (InterruptedException e) {
@@ -166,7 +166,7 @@ public class Repository implements Comparable<Repository> {
      * @return the location of the repository, or where it would be if it were cloned.
      */
     public String getLocalRepoLocation() {
-        return Config.repositoryFolder + File.separator + this.repo.replace('/', File.separatorChar);
+        return Config.repositoryDirectory + this.repo.replace('/', File.separatorChar);
     }
 
     /**
@@ -176,7 +176,7 @@ public class Repository implements Comparable<Repository> {
      */
     public RepositoryConfig getRepositoryConfig() {
         String page = this.repo + "/raw/HEAD/config.cfg";
-        if (this.repo.startsWith("/")) {
+        if (FileUtil.isLocalPath(this.repo)) {
             Path path = Paths.get(page);
             if (Files.exists(path)) {
                 try {

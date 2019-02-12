@@ -92,7 +92,7 @@ public class StringUtil {
      * @param bytes the bytes to encode
      * @return The MIME encoded bytes with no new lines.
      */
-    public static String base64EncodeOneLine(byte[] bytes) {
+    public static String base64EncodeOneLine(byte... bytes) {
         return new String(Base64.getMimeEncoder(Integer.MAX_VALUE, new byte[0]).encode(bytes), StandardCharsets.UTF_8);
     }
 
